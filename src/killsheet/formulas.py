@@ -4,7 +4,9 @@ Units: ppg (mud weight), psi (pressure), ft (true vertical depth).
 Every function is "pure": it only uses its inputs and returns a number.
 
 Rounding rules (IADC WellSharp Formula Sheet, Field Units, Rev 4, 2025):
-  1. Kill mud weight is always rounded UP to 0.1 ppg.
+  1. Kill mud weight is always rounded UP to the NEXT 0.1 ppg - even an
+     exact value goes up (10.8 -> 10.9), so the well is killed, not
+     just balanced.
   2. Anything that is a MAXIMUM (max allowable mud weight, MAASP) is
      always rounded DOWN.
   3. Everything else uses ordinary rounding (.5 goes up) to the
@@ -18,20 +20,24 @@ import math
 PSI_PER_FT_PER_PPG = 0.052
 
 
-def round_up_to_tenth(value):
-    """Round UP to the next 0.1 (e.g. 10.81 -> 10.9, 10.80 -> 10.8).
+def round_up_to_next_tenth(value):
+    """Round UP to the NEXT 0.1, even if the value is already exact.
+
+    Examples: 10.73 -> 10.8, 10.81 -> 10.9, 10.80 -> 10.9.
+
+    Used for kill mud weight. An exact value only BALANCES the formation;
+    the extra 0.1 ppg is the minimum safety factor that KILLS the well.
 
     The value is first tidied to 6 decimal places so that tiny computer
-    arithmetic errors (10.8 stored as 10.8000000001) don't push it up an
-    extra 0.1 ppg.
+    arithmetic errors (10.8 stored as 10.7999999999) can't change the answer.
     """
-    return math.ceil(round(value * 10, 6)) / 10
+    return (math.floor(round(value * 10, 6)) + 1) / 10
 
 
 def round_down_to_tenth(value):
     """Round DOWN to the previous 0.1 (e.g. 14.39 -> 14.3, 14.30 -> 14.3).
 
-    Tidied to 6 decimal places first, for the same reason as round_up_to_tenth.
+    Tidied to 6 decimal places first, for the same reason as round_up_to_next_tenth.
     """
     return math.floor(round(value * 10, 6)) / 10
 
@@ -55,14 +61,23 @@ def round_down_to_whole_number(value):
 
 
 def kill_mud_weight(sidpp_psi, tvd_ft, original_mud_weight_ppg):
-    """Kill mud weight (ppg), rounded UP to 0.1 ppg.
+    """Kill mud weight (ppg), rounded UP to the NEXT 0.1 ppg.
 
         KMW = OMW + SIDPP / (0.052 x TVD)
 
     Uses TRUE VERTICAL depth of the bit, not measured depth.
+    An exact answer still goes up 0.1 ppg (11.0 -> 11.1) as a safety factor.
+
+    SIDPP must be greater than 0. A zero reading with a float in the string
+    is not a true SIDPP - the float must be bumped to find it.
     """
+    if sidpp_psi <= 0:
+        raise ValueError(
+            "SIDPP must be greater than 0 psi. If the drill pipe reads 0 with a "
+            "float in the string, bump the float to determine the true SIDPP."
+        )
     raw_kmw = original_mud_weight_ppg + sidpp_psi / (PSI_PER_FT_PER_PPG * tvd_ft)
-    return round_up_to_tenth(raw_kmw)
+    return round_up_to_next_tenth(raw_kmw)
 
 
 def initial_circulating_pressure(sidpp_psi, scr_pressure_psi):

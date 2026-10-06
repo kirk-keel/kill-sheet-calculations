@@ -16,11 +16,15 @@ and must be able to explain every file in an interview.
 
 | Item | Rule |
 |---|---|
-| Kill mud weight (KMW) | Calculated from **TVD**, rounded **UP** to 0.1 ppg |
+| Kill mud weight (KMW) | Calculated from **TVD**, rounded **UP to the NEXT** 0.1 ppg (exact values still go up 0.1) |
 | Max allowable mud weight (MAMW) | `Test MW + LOT / (0.052 x Shoe TVD)`, rounded **DOWN** to 0.1 ppg |
 | MAASP | `(MAMW - Current MW) x 0.052 x Shoe TVD`, rounded **DOWN** to whole psi |
 | Initial circulating pressure (ICP) | `ICP = SIDPP + SCR pressure` |
 | Final circulating pressure (FCP) | `FCP = SCR pressure x (KMW / OMW)` |
+
+**SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
+true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
+`ValueError` saying so rather than calculating from 0.
 
 Never change a rounding direction or formula without the user's explicit approval.
 
@@ -29,7 +33,10 @@ Never change a rounding direction or formula without the user's explicit approva
 Based on the IADC WellSharp Formula Sheet – Field Units, Revision 4, 26 March 2025
 (https://iadc.org/wp-content/uploads/2025/04/WSP-FormulaSheet_FieldUnits_rev4.pdf)
 
-1. **Kill weight fluid is always rounded UP** to the nearest 0.1 ppg (10.73 -> 10.8).
+1. **Kill weight fluid is always rounded UP to the NEXT 0.1 ppg** (10.73 -> 10.8).
+   An exact value still goes up (10.8 -> 10.9): an exact KMW only balances the
+   formation, it doesn't kill the well. The 0.1 ppg is the minimum safety factor.
+   This is stricter than the literal IADC wording — it is the user's rule; keep it.
 2. **Anything that is a maximum is always rounded DOWN** — MAMW / LOT equivalent
    mud weight (11.76 -> 11.7 ppg), MAASP (1497.6 -> 1497 psi), etc.
    The IADC pressure reduction schedule is also rounded DOWN to a whole

@@ -10,6 +10,6 @@ using oilfield units (ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk).
 
 - [x] Phase 1 – Project skeleton
 - [x] Phase 2 – Core formulas (KMW, ICP, FCP, MAASP)
-- [ ] Phase 3 – Tests against a hand-worked example
+- [x] Phase 3 – Tests against a hand-worked example
 - [ ] Phase 4 – Strokes and drill pipe pressure schedule
 - [ ] Phase 5 – CI workflow and complete README
