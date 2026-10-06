@@ -8,7 +8,11 @@ A Python kill sheet calculator for a **vertical well with a surface BOP stack**.
 Public portfolio project for a well control specialist who is not a programmer
 and must be able to explain every file in an interview.
 
-- Package lives in `src/killsheet/`, tests in `tests/` (pytest).
+- Package lives in `src/killsheet/`, tests in `tests/` (pytest), one test file per module:
+  - `rounding.py` — the rounding helpers (the only place rounding is done)
+  - `formulas.py` — KMW, ICP, FCP, MAMW, MAASP
+  - `strokes.py` — section volumes and surface-to-bit / bit-to-shoe / bit-to-surface strokes
+  - `schedule.py` — Wait and Weight drill pipe pressure schedule, ICP to FCP
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
 
@@ -21,6 +25,19 @@ and must be able to explain every file in an interview.
 | MAASP | `(MAMW - Current MW) x 0.052 x Shoe TVD`, rounded **DOWN** to whole psi |
 | Initial circulating pressure (ICP) | `ICP = SIDPP + SCR pressure` |
 | Final circulating pressure (FCP) | `FCP = SCR pressure x (KMW / OMW)` |
+
+**Strokes:** a section is `(capacity_bbl_per_ft, length_ft)`. Each section volume
+is rounded to 0.1 bbl, totals are the sum of rounded section volumes, and strokes
+= total volume / pump output, rounded to a whole stroke. Surface line volume is an
+optional input to surface-to-bit strokes; if the user doesn't have it, it is 0.
+
+**Pressure schedule:** the user chooses the step method:
+- `EVERY_100_STROKES` (default): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
+- `TEN_STEPS`: exactly 10 steps of `surface-to-bit strokes / 10` (rounded to a whole
+  stroke); drop = `(ICP - FCP) / 10`
+
+The drop is always rounded **DOWN** to a whole psi. Each row = `ICP - drop x steps`;
+the last row is FCP at surface-to-bit strokes. The schedule ends at FCP — no rows after.
 
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
