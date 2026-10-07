@@ -1,6 +1,6 @@
-"""Tests for the drill pipe pressure schedule.
+"""Tests for the Wait and Weight drill pipe pressure schedule.
 
-Same example well: ICP 1,400 psi, FCP 829 psi, surface-to-bit 1,672 strokes.
+Baseline example well: ICP 1,400 psi, FCP 829 psi, surface-to-bit 1,627 strokes.
 The expected answers were worked by hand.
 """
 
@@ -17,35 +17,35 @@ from killsheet.schedule import (
 
 ICP_PSI = 1400
 FCP_PSI = 829
-SURFACE_TO_BIT_STROKES = 1672
+SURFACE_TO_BIT_STROKES = 1627
 
 
 def test_pressure_drop_per_100_strokes_rounds_down():
-    # (1,400 - 829) / (1,672 / 100) = 571 / 16.72 = 34.15 -> round DOWN -> 34
-    assert pressure_drop_per_100_strokes(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == 34
+    # (1,400 - 829) / (1,627 / 100) = 571 / 16.27 = 35.10 -> round DOWN -> 35
+    assert pressure_drop_per_100_strokes(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == 35
 
 
 def test_pressure_schedule():
-    # ICP minus 34 psi every 100 strokes; FCP at surface-to-bit strokes.
+    # ICP minus 35 psi every 100 strokes; FCP at surface-to-bit strokes.
     assert pressure_schedule(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == [
         (0, 1400),
-        (100, 1366),
-        (200, 1332),
-        (300, 1298),
-        (400, 1264),
-        (500, 1230),
-        (600, 1196),
-        (700, 1162),
-        (800, 1128),
-        (900, 1094),
-        (1000, 1060),
-        (1100, 1026),
-        (1200, 992),
-        (1300, 958),
-        (1400, 924),
-        (1500, 890),
-        (1600, 856),
-        (1672, 829),
+        (100, 1365),
+        (200, 1330),
+        (300, 1295),
+        (400, 1260),
+        (500, 1225),
+        (600, 1190),
+        (700, 1155),
+        (800, 1120),
+        (900, 1085),
+        (1000, 1050),
+        (1100, 1015),
+        (1200, 980),
+        (1300, 945),
+        (1400, 910),
+        (1500, 875),
+        (1600, 840),
+        (1627, 829),
     ]
 
 
@@ -56,26 +56,26 @@ def test_every_100_strokes_is_the_default():
 
 
 def test_ten_steps_strokes_and_drop():
-    # 1,672 / 10 = 167.2 -> 167 strokes per step
-    assert strokes_per_step_for_ten_steps(SURFACE_TO_BIT_STROKES) == 167
+    # 1,627 / 10 = 162.7 -> 163 strokes per step
+    assert strokes_per_step_for_ten_steps(SURFACE_TO_BIT_STROKES) == 163
     # (1,400 - 829) / 10 = 57.1 -> round DOWN -> 57 psi per step
     assert pressure_drop_per_step_for_ten_steps(ICP_PSI, FCP_PSI) == 57
 
 
 def test_ten_steps_schedule():
-    # ICP minus 57 psi every 167 strokes for 10 steps; FCP at surface-to-bit strokes.
+    # ICP minus 57 psi every 163 strokes for 10 steps; FCP at surface-to-bit strokes.
     assert pressure_schedule(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES, TEN_STEPS) == [
         (0, 1400),
-        (167, 1343),
-        (334, 1286),
-        (501, 1229),
-        (668, 1172),
-        (835, 1115),
-        (1002, 1058),
-        (1169, 1001),
-        (1336, 944),
-        (1503, 887),
-        (1672, 829),
+        (163, 1343),
+        (326, 1286),
+        (489, 1229),
+        (652, 1172),
+        (815, 1115),
+        (978, 1058),
+        (1141, 1001),
+        (1304, 944),
+        (1467, 887),
+        (1627, 829),
     ]
 
 

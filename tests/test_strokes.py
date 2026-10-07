@@ -1,7 +1,7 @@
 """Tests for volumes and pump strokes.
 
-Same example well as tests/test_formulas.py (TVD 11,500 ft, shoe 5,150 ft).
-The expected answers were worked by hand.
+Baseline example well: vertical, untapered string (one drill pipe size + BHA),
+TVD 11,500 ft, shoe 5,150 ft. The expected answers were worked by hand.
 """
 
 from killsheet.strokes import (
@@ -19,29 +19,33 @@ from killsheet.strokes import (
 # ---------------------------------------------------------------------------
 PUMP_OUTPUT_BBL_PER_STK = 0.117
 
-DRILL_PIPE = (0.0178, 10_600)          # 5" 19.5# DP
-DRILL_COLLARS = (0.0077, 900)          # 6-1/2" x 2-13/16" DC
-DRILL_STRING = [DRILL_PIPE, DRILL_COLLARS]
+DRILL_PIPE = (0.0178, 10_000)          # 5" 19.5# DP
+HWDP = (0.0087, 900)                   # 5" HWDP, ID 3"  (3^2 / 1029.4)
+DRILL_COLLARS = (0.0077, 600)          # 6-1/2" x 2-13/16" DC
+DRILL_STRING = [DRILL_PIPE, HWDP, DRILL_COLLARS]
 
-DC_IN_OPEN_HOLE = (0.0291, 900)        # (8.5^2 - 6.5^2) / 1029.4
-DP_IN_OPEN_HOLE = (0.0459, 5_450)      # (8.5^2 - 5^2) / 1029.4; 6,350 ft of open hole - 900 ft DC
+DC_IN_OPEN_HOLE = (0.0291, 600)        # (8.5^2 - 6.5^2) / 1029.4
+HWDP_IN_OPEN_HOLE = (0.0459, 900)      # (8.5^2 - 5^2) / 1029.4
+DP_IN_OPEN_HOLE = (0.0459, 4_850)      # 6,350 ft of open hole - 1,500 ft BHA
 DP_IN_CASING = (0.0489, 5_150)         # (8.681^2 - 5^2) / 1029.4
-OPEN_HOLE_ANNULUS = [DC_IN_OPEN_HOLE, DP_IN_OPEN_HOLE]
+OPEN_HOLE_ANNULUS = [DC_IN_OPEN_HOLE, HWDP_IN_OPEN_HOLE, DP_IN_OPEN_HOLE]
 FULL_ANNULUS = OPEN_HOLE_ANNULUS + [DP_IN_CASING]
 
 
 def test_section_volumes():
-    assert section_volume(*DRILL_PIPE) == 188.7        # 0.0178 x 10,600 = 188.68
-    assert section_volume(*DRILL_COLLARS) == 6.9       # 0.0077 x 900 = 6.93
-    assert section_volume(*DC_IN_OPEN_HOLE) == 26.2    # 0.0291 x 900 = 26.19
-    assert section_volume(*DP_IN_OPEN_HOLE) == 250.2   # 0.0459 x 5,450 = 250.155
+    assert section_volume(*DRILL_PIPE) == 178.0        # 0.0178 x 10,000 = 178.0
+    assert section_volume(*HWDP) == 7.8                # 0.0087 x 900 = 7.83
+    assert section_volume(*DRILL_COLLARS) == 4.6       # 0.0077 x 600 = 4.62
+    assert section_volume(*DC_IN_OPEN_HOLE) == 17.5    # 0.0291 x 600 = 17.46
+    assert section_volume(*HWDP_IN_OPEN_HOLE) == 41.3  # 0.0459 x 900 = 41.31
+    assert section_volume(*DP_IN_OPEN_HOLE) == 222.6   # 0.0459 x 4,850 = 222.615
     assert section_volume(*DP_IN_CASING) == 251.8      # 0.0489 x 5,150 = 251.835
 
 
 def test_total_volumes():
-    assert total_volume(DRILL_STRING) == 195.6         # 188.7 + 6.9
-    assert total_volume(OPEN_HOLE_ANNULUS) == 276.4    # 26.2 + 250.2
-    assert total_volume(FULL_ANNULUS) == 528.2         # 276.4 + 251.8
+    assert total_volume(DRILL_STRING) == 190.4         # 178.0 + 7.8 + 4.6
+    assert total_volume(OPEN_HOLE_ANNULUS) == 281.4    # 17.5 + 41.3 + 222.6
+    assert total_volume(FULL_ANNULUS) == 533.2         # 281.4 + 251.8
 
 
 def test_strokes_for_volume():
@@ -50,20 +54,20 @@ def test_strokes_for_volume():
 
 
 def test_surface_to_bit_strokes():
-    # 195.6 / 0.117 = 1,671.8 -> 1,672
-    assert surface_to_bit_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK) == 1672
+    # 190.4 / 0.117 = 1,627.4 -> 1,627
+    assert surface_to_bit_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK) == 1627
 
 
 def test_surface_to_bit_strokes_with_surface_lines():
-    # (5.0 + 195.6) / 0.117 = 200.6 / 0.117 = 1,714.5 -> 1,715
-    assert surface_to_bit_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK, surface_line_volume_bbl=5.0) == 1715
+    # (5.0 + 190.4) / 0.117 = 195.4 / 0.117 = 1,670.1 -> 1,670
+    assert surface_to_bit_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK, surface_line_volume_bbl=5.0) == 1670
 
 
 def test_bit_to_shoe_strokes():
-    # 276.4 / 0.117 = 2,362.4 -> 2,362
-    assert bit_to_shoe_strokes(OPEN_HOLE_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == 2362
+    # 281.4 / 0.117 = 2,405.1 -> 2,405
+    assert bit_to_shoe_strokes(OPEN_HOLE_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == 2405
 
 
 def test_bit_to_surface_strokes():
-    # 528.2 / 0.117 = 4,514.5 -> 4,515
-    assert bit_to_surface_strokes(FULL_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == 4515
+    # 533.2 / 0.117 = 4,557.3 -> 4,557
+    assert bit_to_surface_strokes(FULL_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == 4557

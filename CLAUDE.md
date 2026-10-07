@@ -4,14 +4,21 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-A Python kill sheet calculator for a **vertical well with a surface BOP stack**.
-Public portfolio project for a well control specialist who is not a programmer
-and must be able to explain every file in an interview.
+A free Python kill sheet calculator for oilfield hands. The goal is to plan and
+kill all types of wells using every well control technique. Public portfolio
+project for a well control specialist who is not a programmer and must be able
+to explain every file in an interview.
+
+**Baseline = the simplest kill:** vertical well, untapered string (ONE drill pipe
+size + BHA, where BHA = HWDP + drill collars), surface BOP stack, Driller's method.
+Every later feature adds one complication on top of the baseline, and the
+baseline must keep working and keep its tests.
 
 - Package lives in `src/killsheet/`, tests in `tests/` (pytest), one test file per module:
   - `rounding.py` — the rounding helpers (the only place rounding is done)
   - `formulas.py` — KMW, ICP, FCP, MAMW, MAASP
   - `strokes.py` — section volumes and surface-to-bit / bit-to-shoe / bit-to-surface strokes
+  - `drillers.py` — Driller's method kill steps (the baseline method)
   - `schedule.py` — Wait and Weight drill pipe pressure schedule, ICP to FCP
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -31,7 +38,12 @@ is rounded to 0.1 bbl, totals are the sum of rounded section volumes, and stroke
 = total volume / pump output, rounded to a whole stroke. Surface line volume is an
 optional input to surface-to-bit strokes; if the user doesn't have it, it is 0.
 
-**Pressure schedule:** the user chooses the step method:
+**Driller's method:** 1st circulation (original mud): hold drill pipe at ICP for
+bit-to-surface strokes. 2nd circulation (kill mud): hold casing constant at the
+SIDPP value for surface-to-bit strokes, then hold drill pipe at FCP for
+bit-to-surface strokes.
+
+**Wait and Weight pressure schedule:** the user chooses the step method:
 - `EVERY_100_STROKES` (default): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
 - `TEN_STEPS`: exactly 10 steps of `surface-to-bit strokes / 10` (rounded to a whole
   stroke); drop = `(ICP - FCP) / 10`
@@ -82,7 +94,7 @@ and a maximum must never be overstated.
 
 Do not use Python's built-in `round()` — it rounds .5 to the nearest even
 number (894.5 -> 894), which is not academic rounding. Use the helpers in
-`formulas.py`.
+`rounding.py`.
 
 ## Code style
 
@@ -101,16 +113,33 @@ what was built and why, and wait for the user to say "next".
    answers to the user for verification **before** writing the tests
 4. Strokes (surface-to-bit, bit-to-shoe, bit-to-surface) and the drill pipe
    pressure schedule from ICP to FCP
-5. GitHub Actions workflow running tests on every push, plus complete README
+5. GitHub Actions workflow, complete README, and v0.1 matched to the baseline
+   (Driller's method, untapered example well) — released as v0.1
+
+Every phase that adds calculations: show a hand-worked example to the user and
+get it verified before committing.
+
+Roadmap after v0.1 (one complication at a time):
+6. Tapered strings — Wait and Weight schedule calculated per pipe section
+7. Deviated and horizontal wells — MD and TVD at key points
+8. Volumetric method and bullheading
+9. Subsea BOP stack — choke line friction, riser margin, choke line strokes
+10. Web page interface
 
 ## Git / GitHub
 
 - Repo: https://github.com/kirk-keel/kill-sheet-calculations (public, GitHub account `kirk-keel`)
 - Default branch: `main`. Commit at the end of each phase once the user approves.
+- License: MIT (`LICENSE`), copyright Kirk Keel.
+- CI: `.github/workflows/tests.yml` runs pytest on Python 3.10–3.13 on every push and PR.
 
 ## Commands
 
 ```
-pip install -e ".[dev]"   # install package + pytest in editable mode
-pytest                    # run tests
+pip install -e ".[dev]"            # install package + pytest in editable mode
+pytest                             # run tests
+python examples/example_well.py    # print a full kill sheet for the example well
 ```
+
+If you change the example well or the output format, update the "Example output"
+section of README.md to match.
