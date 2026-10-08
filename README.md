@@ -12,7 +12,8 @@ and the Driller's method. Everything after that is built on top of it, one
 complication at a time. **Version 0.2** adds tapered strings, **version 0.3** adds
 deviated and horizontal wells, and **version 0.4** completes the Driller's method on a
 surface stack for every well and string type. **Version 0.5** adds Wait and Weight,
-and **version 0.6** extends it to tapered strings. See the [roadmap](#roadmap).
+**version 0.6** extends it to tapered strings, and **version 0.7** to deviated and
+horizontal wells. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -48,6 +49,8 @@ pip install -e ".[dev]"
 python examples/example_well.py      # baseline: vertical, untapered string
 python examples/wait_and_weight_well.py   # baseline well, Wait and Weight
 python examples/wait_and_weight_tapered_well.py   # vertical tapered string, Wait and Weight
+python examples/wait_and_weight_deviated_well.py     # deviated, Wait and Weight
+python examples/wait_and_weight_horizontal_well.py   # horizontal, Wait and Weight
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -80,7 +83,8 @@ an error if the section lengths don't add up to the bit and shoe MD. Set `method
 | Strokes | `Volume / Pump output` |
 | Strokes to a crossover | `Running total of rounded section volumes / Pump output` |
 | Surface to bit volume | `Surface lines (optional) + Drill string` |
-| W&W drill pipe pressure | `ICP - (ICP - FCP) x (MD of kill mud / Bit MD)`, drop rounded down |
+| W&W drill pipe pressure | `ICP - [SIDPP x (TVD of kill mud / Bit TVD) - (FCP - SCR) x (MD of kill mud / Bit MD)]`, drop rounded down |
+| W&W, vertical well | reduces to `ICP - (ICP - FCP) x (MD of kill mud / Bit MD)` |
 | W&W MD of kill mud | Walk down the string: `full sections + section length x (volume left / section volume)` |
 | W&W steps | 10 steps of `Surface-to-bit strokes / 10` (default), or every 100 strokes |
 | W&W recalculation (reads high) | `Actual SCR = Observed ICP - Retaken SIDPP`, `FCP = Actual SCR x (KMW / OMW)`, never lower than calculated FCP |
@@ -137,6 +141,14 @@ a different distance and the schedule bends at every crossover. A straight line 
 strokes takes pressure off before the kill mud is deep enough to replace it: on the
 baseline well it is up to 38 psi short at the HWDP crossover, and 112 psi short at the
 crossover of a 5" x 3-1/2" tapered string. (Fixed in v0.5.1.)
+
+**Deviated and horizontal wells.** The kill mud adds hydrostatic by **TVD** and friction by
+**MD**, so the schedule uses both, and every key point (KOP, end of build, heel) gets its
+own row. In a horizontal well the drill pipe pressure bottoms out at the heel and then
+**climbs back to FCP** along the lateral: TVD stops changing, but friction keeps building.
+Follow the schedule up to FCP. Treating the well as vertical would hold too much pressure:
+218 psi too much at the heel of the horizontal example, straight onto a shoe with 796 psi
+MAASP.
 
 ### Rounding: three rules
 
@@ -264,21 +276,21 @@ Wait and Weight
     check      drill pipe and casing 0 psi
                both must read 0 psi (+/-10 psi) - the well is dead
 
-  Drill pipe step-down schedule (10 steps) - pressure follows the depth of the kill mud
-    Strokes   Kill mud MD ft      psi
-          0                0    1,400
-        163            1,073    1,347
-        326            2,140    1,294
-        489            3,213    1,241
-        652            4,287    1,188
-        815            5,360    1,134
-        978            6,427    1,081
-      1,141            7,500    1,028
-      1,304            8,573      975
-      1,467            9,640      922
-      1,521           10,000      904   <- crossover
-      1,588           10,900      859   <- crossover
-      1,627           11,500      829   <- bit
+  Drill pipe step-down schedule (10 steps) - pressure follows where the kill mud is
+    Strokes    Kill mud MD ft   TVD ft      psi
+          0                0        0    1,400
+        163            1,073    1,073    1,347
+        326            2,140    2,140    1,294
+        489            3,213    3,213    1,241
+        652            4,287    4,287    1,188
+        815            5,360    5,360    1,134
+        978            6,427    6,427    1,081
+      1,141            7,500    7,500    1,028
+      1,304            8,573    8,573      975
+      1,467            9,640    9,640      922
+      1,521           10,000   10,000      904   <- crossover
+      1,588           10,900   10,900      859   <- crossover
+      1,627           11,500   11,500      829   <- bit
 ```
 
 ## Roadmap
@@ -301,7 +313,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 **Wait and Weight**
 - [x] Vertical, untapered string (**v0.5**; schedule by depth of kill mud **v0.5.1**)
 - [x] Vertical, tapered string (**v0.6**)
-- [ ] Deviated and horizontal, untapered string
+- [x] Deviated and horizontal, untapered string (**v0.7**)
 - [ ] Deviated and horizontal, tapered string
 
 **Volumetric method and lubricate and bleed**
@@ -349,13 +361,16 @@ src/killsheet/
   kill_steps.py  kill steps, stages and shut-in gauge checks shared by every method
   drillers.py    Driller's method kill steps
   wait_and_weight.py  Wait and Weight kill steps, ICP check and recalculation
-  schedule.py    Wait and Weight drill pipe step-down schedule, by depth of kill mud
+  schedule.py    Wait and Weight drill pipe step-down schedule: hydrostatic by TVD,
+                 friction by MD, with a row at every crossover and key point
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
   example_well.py        baseline: vertical, untapered string
   wait_and_weight_well.py  baseline well, Wait and Weight
   wait_and_weight_tapered_well.py  vertical tapered string, Wait and Weight
+  wait_and_weight_deviated_well.py    deviated, Wait and Weight
+  wait_and_weight_horizontal_well.py  horizontal, Wait and Weight
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

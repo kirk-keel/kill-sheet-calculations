@@ -41,10 +41,10 @@ def test_inflection_points_at_each_crossover():
     crossovers = [tuple(row) for row in pressure_schedule(ICP_PSI, FCP_PSI, DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK)
                   if row.label in (CROSSOVER, BIT)]
     assert crossovers == [
-        (1065, 7_000, 1053, CROSSOVER),     # 347.6 -> 347
-        (1292, 10_600, 874, CROSSOVER),     # 526.3 -> 526
-        (1314, 11_200, 844, CROSSOVER),     # 556.1 -> 556
-        (1326, 11_500, 829, BIT),           # FCP
+        (1065, 7_000, 7_000, 1053, CROSSOVER),     # 347.6 -> 347
+        (1292, 10_600, 10_600, 874, CROSSOVER),     # 526.3 -> 526
+        (1314, 11_200, 11_200, 844, CROSSOVER),     # 556.1 -> 556
+        (1326, 11_500, 11_500, 829, BIT),           # FCP
     ]
 
 
@@ -53,6 +53,6 @@ def test_a_straight_line_against_strokes_would_be_112_psi_short_at_the_crossover
     # By depth (kill mud at 7,000 ft): 1,053 psi. The straight line would take
     # 112 psi off before the kill mud is deep enough to replace it.
     straight_line = ICP_PSI - (ICP_PSI - FCP_PSI) * 1065 / 1326
-    by_depth = drill_pipe_pressure(ICP_PSI, FCP_PSI, 7_000, 11_500)
+    by_depth = drill_pipe_pressure(ICP_PSI, FCP_PSI, 650, 7_000, 7_000, 11_500, 11_500)
     assert by_depth == 1053
     assert round(by_depth - straight_line) == 112

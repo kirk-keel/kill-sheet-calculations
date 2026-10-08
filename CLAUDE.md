@@ -87,8 +87,15 @@ the starting volume); annulus listed bit up.
 
 **Wait and Weight step-down schedule** (user-approved, v0.5.1): pressure follows the
 DEPTH of the kill mud, never a straight line against strokes:
-- Vertical: `P = ICP - (ICP - FCP) x (MD of kill mud / bit MD)` — the "FCP form" (user
-  choice): lands exactly on FCP at the bit. The drop from ICP is rounded DOWN.
+- General (user-approved v0.7): `P = ICP - [SIDPP x (TVD/bit TVD) - (FCP - SCR) x (MD/bit MD)]`
+  with SCR = ICP - SIDPP — the "FCP form" (user choice): hydrostatic by TVD, friction by
+  MD, lands exactly on FCP at the bit. The drop (in brackets) is rounded DOWN.
+- Vertical (TVD = MD) reduces to `P = ICP - (ICP - FCP) x (MD of kill mud / bit MD)`.
+- Deviated/horizontal: pass `sidpp_psi`, `bit_tvd_ft`, `key_points` (name, MD, TVD) to
+  `pressure_schedule`; every key point (KOP, end of build, heel) gets its own row.
+  Horizontal: pressure bottoms out at the heel, then CLIMBS to FCP along the lateral —
+  user rule: the crew follows the schedule up to FCP (no minimum hold).
+- After a high-ICP recalculation, the schedule uses the RETAKEN SIDPP.
 - MD of kill mud after N strokes (`md_after_strokes`): volume = N x pump output (0.1 bbl)
   minus surface lines; walk the string; inside a section MD = start + section length x
   (volume left / ROUNDED section volume), so crossover strokes land exactly on crossovers.
@@ -177,7 +184,7 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
-- Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) next, then (d)
+- Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) next
 - Volumetric method and lubricate and bleed: (a)-(d)
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)

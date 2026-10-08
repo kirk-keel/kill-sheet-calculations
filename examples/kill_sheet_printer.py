@@ -166,11 +166,13 @@ def print_kill_sheet(
                       "(never recalculated lower)")
         print_steps(wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf))
         print()
-        print(f"  Drill pipe step-down schedule ({step_method}) - pressure follows the depth of the kill mud")
-        print("    Strokes   Kill mud MD ft      psi")
-        for row in pressure_schedule(icp, fcp, string, pump, surface_line_volume_bbl, step_method):
+        print(f"  Drill pipe step-down schedule ({step_method}) - pressure follows where the kill mud is")
+        print("    Strokes    Kill mud MD ft   TVD ft      psi")
+        schedule = pressure_schedule(icp, fcp, string, pump, surface_line_volume_bbl, step_method,
+                                     sidpp_psi=sidpp_at_start, bit_tvd_ft=bit_tvd_ft, key_points=key_points)
+        for row in schedule:
             label = "" if row.label == STEP else f"   <- {row.label}"
-            print(f"    {row.strokes:>7,}  {row.md_ft:>15,}  {row.pressure_psi:>7,}{label}")
+            print(f"    {row.strokes:>7,}  {row.md_ft:>15,}  {row.tvd_ft:>7,}  {row.pressure_psi:>7,}{label}")
     else:
         raise ValueError(f"method must be {DRILLERS!r} or {WAIT_AND_WEIGHT!r}")
 
