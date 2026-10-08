@@ -38,6 +38,7 @@ TEST_MUD_WEIGHT_PPG = 9.6
 
 # --- Kick data -----------------------------------------------------------------
 SIDPP_PSI = 650
+SICP_PSI = 800
 SCR_PRESSURE_PSI = 750          # at 30 spm
 
 # --- Pump and volumes (sections are (capacity bbl/ft, length ft)) ---------------
@@ -84,9 +85,18 @@ def main():
 
     if METHOD == DRILLERS:
         print(DRILLERS)
-        for step in drillers_method(SIDPP_PSI, icp, fcp, stb, btsurf):
-            print(f"  {step.circulation}")
-            print(f"      hold {step.gauge} at {step.hold_psi:,} psi for {step.strokes:,} stks")
+        circulation = None
+        for step in drillers_method(SIDPP_PSI, SICP_PSI, icp, fcp, stb, btsurf):
+            if step.circulation != circulation:
+                circulation = step.circulation
+                print(f"  {circulation}")
+            line = f"    {step.stage:<11}{step.gauge}"
+            if step.hold_psi is not None:
+                line += f" {step.hold_psi:,} psi"
+            if step.strokes is not None:
+                line += f" for {step.strokes:,} stks"
+            print(line)
+            print(f"{'':15}{step.note}")
     elif METHOD == WAIT_AND_WEIGHT:
         print(f"{WAIT_AND_WEIGHT} - drill pipe pressure schedule ({STEP_METHOD})")
         print("  Strokes      psi")

@@ -38,10 +38,17 @@ is rounded to 0.1 bbl, totals are the sum of rounded section volumes, and stroke
 = total volume / pump output, rounded to a whole stroke. Surface line volume is an
 optional input to surface-to-bit strokes; if the user doesn't have it, it is 0.
 
-**Driller's method:** 1st circulation (original mud): hold drill pipe at ICP for
-bit-to-surface strokes. 2nd circulation (kill mud): hold casing constant at the
-SIDPP value for surface-to-bit strokes, then hold drill pipe at FCP for
-bit-to-surface strokes.
+**Driller's method** (constant bottomhole pressure, user-confirmed):
+- Start-up AND shut-down of EVERY circulation: hold CASING pressure constant while
+  bringing the pump up to / down from the kill rate.
+- 1st circulation (original mud): start up holding casing at SICP, then hold drill
+  pipe at ICP. One bottoms up is a MINIMUM — circulate until the gas is out.
+  Shut-in check: SIDPP and SICP both read the original SIDPP (±10 psi). SICP higher
+  = strung-out gas still in the annulus, continue circulating.
+- 2nd circulation (kill mud): start up holding casing at the SIDPP value, hold casing
+  constant for surface-to-bit strokes, then hold drill pipe at FCP for bit-to-surface
+  strokes. Shut-in check: SIDPP and SICP both read 0 (±10 psi) = well dead.
+- Gauge tolerance: ±10 psi (`GAUGE_TOLERANCE_PSI`).
 
 **Wait and Weight pressure schedule:** the user chooses the step method:
 - `EVERY_100_STROKES` (default): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
@@ -119,12 +126,16 @@ what was built and why, and wait for the user to say "next".
 Every phase that adds calculations: show a hand-worked example to the user and
 get it verified before committing.
 
-Roadmap after v0.1 (one complication at a time):
-6. Tapered strings — Wait and Weight schedule calculated per pipe section
+v0.1.1: Driller's start-up/shut-down procedure and shut-in checks (±10 psi).
+
+Roadmap (one complication at a time):
+6. Tapered string, vertical well, Driller's method (strokes to each crossover)
 7. Deviated and horizontal wells — MD and TVD at key points
 8. Volumetric method and bullheading
 9. Subsea BOP stack — choke line friction, riser margin, choke line strokes
-10. Web page interface
+10. Web page interface — including the auto-generated kill plot beside the table:
+    forecast drill pipe AND annulus pressure vs strokes, showing the inflection
+    point at each pipe change (deferred here from Phase 6 by the user)
 
 ## Git / GitHub
 

@@ -22,7 +22,8 @@ all types of wells using every well control technique at their disposal.
 - **Initial and final circulating pressure** (ICP, FCP)
 - **Maximum allowable mud weight** (MAMW) and **MAASP**, before and after the kill
 - **Strokes:** surface to bit (with optional surface line volume), bit to shoe, bit to surface
-- **Driller's method:** what to hold, on which gauge, for how many strokes, for both circulations
+- **Driller's method:** start-up, what to hold on which gauge and for how many strokes,
+  shut-down, and the shut-in checks for both circulations
 - **Wait and Weight:** drill pipe pressure schedule from ICP to FCP, every 100
   strokes or in 10 equal steps
 
@@ -61,11 +62,22 @@ the top. Set `METHOD` to `DRILLERS` or `WAIT_AND_WEIGHT`.
 
 ### Driller's method
 
+A constant bottomhole pressure kill in two circulations. Both circulations use the
+same **start-up** (bring the pump to kill rate holding casing pressure constant) and
+**shut-down** (slow the pump to 0 holding casing pressure constant). The pressures
+only tell the truth if that procedure is followed.
+
 | Circulation | Mud | Hold | For |
 |---|---|---|---|
-| 1st | Original | Drill pipe at **ICP** | Bit-to-surface strokes (kick out) |
+| 1st | Original | Drill pipe at **ICP** | **Minimum** one bottoms up, until the gas is out |
 | 2nd | Kill | Casing **constant** (at the SIDPP value) | Surface-to-bit strokes |
 | 2nd | Kill | Drill pipe at **FCP** | Bit-to-surface strokes |
+
+**Shut-in checks** (gauges within ±10 psi):
+
+- After the 1st circulation, SIDPP and SICP must both read the **original SIDPP**.
+  If SICP is higher, strung-out gas is still in the annulus, so continue circulating.
+- After the 2nd circulation, SIDPP and SICP must both read **0 psi**. The well is dead.
 
 ### Rounding: three rules
 
@@ -109,11 +121,25 @@ Bit to surface                  4,557 stks
 
 Driller's method
   1st circulation (original mud)
-      hold drill pipe at 1,400 psi for 4,557 stks
-  2nd circulation (kill mud), surface to bit
-      hold casing at 650 psi for 1,627 stks
-  2nd circulation (kill mud), bit to surface
-      hold drill pipe at 829 psi for 4,557 stks
+    start-up   casing 800 psi
+               bring pump to kill rate holding casing pressure constant
+    hold       drill pipe 1,400 psi for 4,557 stks
+               minimum - one bottoms up; continue until the gas is out
+    shut-down  casing
+               slow pump to 0 holding casing pressure constant
+    check      drill pipe and casing 650 psi
+               both must read the original SIDPP (+/-10 psi); if SICP is higher, gas is still in the annulus - continue circulating
+  2nd circulation (kill mud)
+    start-up   casing 650 psi
+               bring pump to kill rate holding casing pressure constant
+    hold       casing 650 psi for 1,627 stks
+               kill mud surface to bit
+    hold       drill pipe 829 psi for 4,557 stks
+               kill mud bit to surface
+    shut-down  casing
+               slow pump to 0 holding casing pressure constant
+    check      drill pipe and casing 0 psi
+               both must read 0 psi (+/-10 psi) - the well is dead
 ```
 
 ## Roadmap
@@ -122,11 +148,13 @@ Each step adds one complication to the simplest kill, with hand-worked tests.
 
 - [x] **v0.1:** vertical well, untapered string, surface stack, Driller's method
   (plus a straight-line Wait and Weight schedule)
-- [ ] Tapered strings: Wait and Weight schedule calculated per pipe section
+- [x] **v0.1.1:** Driller's method start-up/shut-down procedure and shut-in checks
+- [ ] Tapered string, vertical well, Driller's method
 - [ ] Deviated and horizontal wells: MD and TVD at key points
 - [ ] Volumetric method and bullheading
 - [ ] Subsea BOP stack: choke line friction, riser margin, choke line strokes
-- [ ] Web page interface
+- [ ] Web page interface, with a kill plot of forecast drill pipe and annulus
+  pressure beside the table, showing the inflection at each pipe change
 
 ## Project layout
 
