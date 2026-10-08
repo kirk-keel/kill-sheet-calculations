@@ -11,7 +11,8 @@ rules, with an extra safety factor on kill mud weight.
 and the Driller's method. Everything after that is built on top of it, one
 complication at a time. **Version 0.2** adds tapered strings, **version 0.3** adds
 deviated and horizontal wells, and **version 0.4** completes the Driller's method on a
-surface stack for every well and string type. See the [roadmap](#roadmap).
+surface stack for every well and string type. **Version 0.5** adds Wait and Weight,
+and **version 0.6** extends it to tapered strings. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -46,6 +47,7 @@ pip install -e ".[dev]"
 
 python examples/example_well.py      # baseline: vertical, untapered string
 python examples/wait_and_weight_well.py   # baseline well, Wait and Weight
+python examples/wait_and_weight_tapered_well.py   # vertical tapered string, Wait and Weight
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -298,7 +300,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 
 **Wait and Weight**
 - [x] Vertical, untapered string (**v0.5**; schedule by depth of kill mud **v0.5.1**)
-- [ ] Vertical, tapered string
+- [x] Vertical, tapered string (**v0.6**)
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
 
@@ -353,6 +355,7 @@ tests/           one test file per module, plus a full kill sheet for each examp
 examples/
   example_well.py        baseline: vertical, untapered string
   wait_and_weight_well.py  baseline well, Wait and Weight
+  wait_and_weight_tapered_well.py  vertical tapered string, Wait and Weight
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
