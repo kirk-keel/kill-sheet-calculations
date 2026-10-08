@@ -6,10 +6,10 @@ A free Python kill sheet calculator for oilfield hands, using oilfield units
 (ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk). Rounding follows the IADC WellSharp
 rules, with an extra safety factor on kill mud weight.
 
-**Version 0.1 covers the simplest kill:** a vertical well, an untapered string
+**Version 0.1 is the simplest kill:** a vertical well, an untapered string
 (one drill pipe size plus a BHA of HWDP and drill collars), a surface BOP stack,
 and the Driller's method. Everything after that is built on top of it, one
-complication at a time. See the [roadmap](#roadmap).
+complication at a time. **Version 0.2** adds tapered strings. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -22,6 +22,8 @@ all types of wells using every well control technique at their disposal.
 - **Initial and final circulating pressure** (ICP, FCP)
 - **Maximum allowable mud weight** (MAMW) and **MAASP**, before and after the kill
 - **Strokes:** surface to bit (with optional surface line volume), bit to shoe, bit to surface
+- **Crossovers:** strokes to each pipe change in the drill string (where the kill mud
+  is) and in the annulus, bit up. Works for untapered and tapered strings
 - **Driller's method:** start-up, what to hold on which gauge and for how many strokes,
   shut-down, and the shut-in checks for both circulations
 - **Wait and Weight:** drill pipe pressure schedule from ICP to FCP, every 100
@@ -36,12 +38,14 @@ git clone https://github.com/kirk-keel/kill-sheet-calculations.git
 cd kill-sheet-calculations
 pip install -e ".[dev]"
 
-python examples/example_well.py   # print a full kill sheet for the example well
+python examples/example_well.py   # baseline well: untapered string
+python examples/tapered_well.py   # tapered string
 pytest                            # run the tests
 ```
 
-To work your own well, copy `examples/example_well.py` and change the numbers at
-the top. Set `METHOD` to `DRILLERS` or `WAIT_AND_WEIGHT`.
+To work your own well, copy one of the example files and change the numbers.
+List the drill string top down and the annulus bit up, one line per pipe size
+or hole/casing size. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`.
 
 ## Conventions
 
@@ -56,6 +60,7 @@ the top. Set `METHOD` to `DRILLERS` or `WAIT_AND_WEIGHT`.
 | MAASP | `(MAMW - Current MW) x 0.052 x Shoe TVD` |
 | Section volume | `Capacity x Length` |
 | Strokes | `Volume / Pump output` |
+| Strokes to a crossover | `Running total of rounded section volumes / Pump output` |
 | Surface to bit volume | `Surface lines (optional) + Drill string` |
 | W&W drop per 100 strokes | `(ICP - FCP) / (Surface-to-bit strokes / 100)` |
 | W&W drop per step (10 steps) | `(ICP - FCP) / 10`, each step = `Surface-to-bit strokes / 10` |
@@ -103,11 +108,11 @@ Rounded values are carried forward into later calculations, just like on paper.
 
 ## Example output
 
-From `python examples/example_well.py`:
+Baseline well, from `python examples/example_well.py`:
 
 ```
-KILL SHEET - vertical well, surface BOP stack
-==============================================
+KILL SHEET - vertical well, untapered string, surface BOP stack
+====================================================
 Kill mud weight                  11.5 ppg
 Initial circulating pressure    1,400 psi
 Final circulating pressure        829 psi
@@ -118,6 +123,17 @@ MAASP (after kill)                830 psi
 Surface to bit                  1,627 stks
 Bit to shoe                     2,405 stks
 Bit to surface                  4,557 stks
+
+Drill string crossovers (top down)     Depth ft   Strokes
+  bottom of 5" 19.5# DP                  10,000     1,521
+  bottom of 5" HWDP                      10,900     1,588
+  bottom of 6-1/2" DC                    11,500     1,627
+
+Annulus crossovers (bit up)            Depth ft   Strokes
+  top of DC x 8-1/2" hole                10,900       150
+  top of HWDP x 8-1/2" hole              10,000       503
+  top of DP x 8-1/2" hole                 5,150     2,405
+  top of DP x 9-5/8" casing                   0     4,557
 
 Driller's method
   1st circulation (original mud)
@@ -142,6 +158,36 @@ Driller's method
                both must read 0 psi (+/-10 psi) - the well is dead
 ```
 
+Tapered string, from `python examples/tapered_well.py` (Driller's steps omitted here):
+
+```
+KILL SHEET - vertical well, tapered string, surface BOP stack
+====================================================
+Kill mud weight                  11.5 ppg
+Initial circulating pressure    1,400 psi
+Final circulating pressure        829 psi
+Max allowable mud weight         12.2 ppg
+MAASP (original mud)              889 psi
+MAASP (after kill)                345 psi
+
+Surface to bit                  1,326 stks
+Bit to shoe                       394 stks
+Bit to surface                  1,796 stks
+
+Drill string crossovers (top down)     Depth ft   Strokes
+  bottom of 5" 19.5# DP                   7,000     1,065
+  bottom of 3-1/2" 13.3# DP              10,600     1,292
+  bottom of 3-1/2" HWDP                  11,200     1,314
+  bottom of 4-3/4" DC                    11,500     1,326
+
+Annulus crossovers (bit up)            Depth ft   Strokes
+  top of DC x 6-1/8" hole                11,200        38
+  top of HWDP x 6-1/8" hole              10,600       163
+  top of 3-1/2" DP x 6-1/8" hole          9,500       394
+  top of 3-1/2" DP x 7" casing            7,000       958
+  top of 5" DP x 7" casing                    0     1,796
+```
+
 ## Roadmap
 
 Each step adds one complication to the simplest kill, with hand-worked tests.
@@ -149,7 +195,8 @@ Each step adds one complication to the simplest kill, with hand-worked tests.
 - [x] **v0.1:** vertical well, untapered string, surface stack, Driller's method
   (plus a straight-line Wait and Weight schedule)
 - [x] **v0.1.1:** Driller's method start-up/shut-down procedure and shut-in checks
-- [ ] Tapered string, vertical well, Driller's method
+- [x] **v0.2:** tapered string, vertical well, Driller's method: strokes to every
+  drill string and annulus crossover
 - [ ] Deviated and horizontal wells: MD and TVD at key points
 - [ ] Volumetric method and bullheading
 - [ ] Subsea BOP stack: choke line friction, riser margin, choke line strokes
@@ -165,15 +212,19 @@ src/killsheet/
   strokes.py     volumes and strokes
   drillers.py    Driller's method kill steps
   schedule.py    Wait and Weight drill pipe pressure schedule
-tests/           one test file per module, all hand-worked examples
-examples/        example_well.py - prints a complete kill sheet
+tests/           one test file per module, plus a full tapered-well kill sheet;
+                 all hand-worked examples
+examples/
+  example_well.py        baseline well: untapered string
+  tapered_well.py        tapered string
+  kill_sheet_printer.py  prints a kill sheet (shared by both examples)
 .github/workflows/tests.yml   runs the tests on every push
 ```
 
 ## Testing
 
-The tests run automatically on GitHub on every push, on Python 3.10–3.13. The
-badge at the top of this page shows whether they're passing.
+The tests and both example kill sheets run automatically on GitHub on every push,
+on Python 3.10–3.13. The badge at the top of this page shows whether they're passing.
 
 ## Disclaimer
 

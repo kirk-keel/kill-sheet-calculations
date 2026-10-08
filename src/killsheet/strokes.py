@@ -54,6 +54,26 @@ def surface_to_bit_strokes(drill_string_sections, pump_output_bbl_per_stk, surfa
     return strokes_for_volume(volume_bbl, pump_output_bbl_per_stk)
 
 
+def crossover_strokes(sections, pump_output_bbl_per_stk, starting_volume_bbl=0):
+    """Strokes to the END of each section, in the order the sections are listed.
+
+        Strokes to a crossover = Running total volume / Pump output
+
+    The running total adds each section's ROUNDED volume and is rounded to
+    0.1 bbl, so the last crossover always matches the total strokes.
+
+    Drill string: list sections top to bottom, and pass any surface line
+                  volume as starting_volume_bbl. Shows where the kill mud is.
+    Annulus:      list sections from the bit up.
+    """
+    running_volume_bbl = starting_volume_bbl
+    strokes = []
+    for capacity_bbl_per_ft, length_ft in sections:
+        running_volume_bbl = round_to_tenth(running_volume_bbl + section_volume(capacity_bbl_per_ft, length_ft))
+        strokes.append(strokes_for_volume(running_volume_bbl, pump_output_bbl_per_stk))
+    return strokes
+
+
 def bit_to_shoe_strokes(open_hole_annulus_sections, pump_output_bbl_per_stk):
     """Strokes to pump from the bit up to the casing shoe.
 

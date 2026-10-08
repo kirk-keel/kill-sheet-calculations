@@ -7,6 +7,7 @@ TVD 11,500 ft, shoe 5,150 ft. The expected answers were worked by hand.
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
+    crossover_strokes,
     section_volume,
     strokes_for_volume,
     surface_to_bit_strokes,
@@ -71,3 +72,32 @@ def test_bit_to_shoe_strokes():
 def test_bit_to_surface_strokes():
     # 533.2 / 0.117 = 4,557.3 -> 4,557
     assert bit_to_surface_strokes(FULL_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == 4557
+
+
+def test_drill_string_crossover_strokes():
+    # Running volume top down: 178.0, 185.8, 190.4 bbl
+    # 178.0 / 0.117 = 1,521.4 -> 1,521   (bottom of DP)
+    # 185.8 / 0.117 = 1,588.0 -> 1,588   (bottom of HWDP)
+    # 190.4 / 0.117 = 1,627.4 -> 1,627   (bit)
+    assert crossover_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK) == [1521, 1588, 1627]
+
+
+def test_last_drill_string_crossover_is_surface_to_bit():
+    assert crossover_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK)[-1] == surface_to_bit_strokes(
+        DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK
+    )
+
+
+def test_drill_string_crossovers_with_surface_lines():
+    # Surface lines are pumped first: 5.0 + 178.0 = 183.0 / 0.117 = 1,564.1 -> 1,564
+    # ... 190.8 -> 1,630.8 -> 1,631; 195.4 -> 1,670.1 -> 1,670 (= surface to bit)
+    assert crossover_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK, starting_volume_bbl=5.0) == [1564, 1631, 1670]
+
+
+def test_annulus_crossover_strokes():
+    # Running volume bit up: 17.5, 58.8, 281.4, 533.2 bbl
+    # 17.5 / 0.117 = 149.6 -> 150   (top of DC)
+    # 58.8 / 0.117 = 502.6 -> 503   (top of HWDP)
+    # 281.4 / 0.117 = 2,405.1 -> 2,405   (shoe = bit to shoe)
+    # 533.2 / 0.117 = 4,557.3 -> 4,557   (surface = bit to surface)
+    assert crossover_strokes(FULL_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == [150, 503, 2405, 4557]

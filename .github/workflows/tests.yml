@@ -28,3 +28,8 @@ jobs:
 
       - name: Run the tests
         run: pytest -v
+
+      - name: Run the example kill sheets
+        run: |
+          python examples/example_well.py
+          python examples/tapered_well.py

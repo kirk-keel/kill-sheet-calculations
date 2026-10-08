@@ -38,6 +38,12 @@ is rounded to 0.1 bbl, totals are the sum of rounded section volumes, and stroke
 = total volume / pump output, rounded to a whole stroke. Surface line volume is an
 optional input to surface-to-bit strokes; if the user doesn't have it, it is 0.
 
+**Crossovers:** `crossover_strokes(sections, pump_output, starting_volume_bbl=0)` gives
+strokes to the END of each section. Running total = sum of ROUNDED section volumes,
+rounded to 0.1 bbl, then / pump output -> whole strokes (user-approved), so the last
+crossover equals the total strokes. Drill string listed top down (surface lines as
+the starting volume); annulus listed bit up.
+
 **Driller's method** (constant bottomhole pressure, user-confirmed):
 - Start-up AND shut-down of EVERY circulation: hold CASING pressure constant while
   bringing the pump up to / down from the kill rate.
@@ -129,7 +135,8 @@ get it verified before committing.
 v0.1.1: Driller's start-up/shut-down procedure and shut-in checks (±10 psi).
 
 Roadmap (one complication at a time):
-6. Tapered string, vertical well, Driller's method (strokes to each crossover)
+6. DONE (v0.2): tapered string, vertical well, Driller's method — strokes to each
+   drill string and annulus crossover
 7. Deviated and horizontal wells — MD and TVD at key points
 8. Volumetric method and bullheading
 9. Subsea BOP stack — choke line friction, riser margin, choke line strokes
@@ -142,15 +149,21 @@ Roadmap (one complication at a time):
 - Repo: https://github.com/kirk-keel/kill-sheet-calculations (public, GitHub account `kirk-keel`)
 - Default branch: `main`. Commit at the end of each phase once the user approves.
 - License: MIT (`LICENSE`), copyright Kirk Keel.
-- CI: `.github/workflows/tests.yml` runs pytest on Python 3.10–3.13 on every push and PR.
+- CI: `.github/workflows/tests.yml` runs pytest and both example scripts on Python
+  3.10–3.13 on every push and PR.
+- Release tags: v0.1, v0.1.1, v0.2 ...
 
 ## Commands
 
 ```
 pip install -e ".[dev]"            # install package + pytest in editable mode
 pytest                             # run tests
-python examples/example_well.py    # print a full kill sheet for the example well
+python examples/example_well.py    # baseline well (untapered string)
+python examples/tapered_well.py    # tapered string
 ```
 
-If you change the example well or the output format, update the "Example output"
+Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each
+example file is just the well data. Sections in the examples are
+`(name, capacity, length)`; the name is for printing only.
+If you change an example well or the output format, update the "Example output"
 section of README.md to match.
