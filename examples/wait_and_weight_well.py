@@ -1,16 +1,18 @@
-"""Kill sheet for the baseline example well - the simplest kill.
+"""Kill sheet for the baseline well using the Wait and Weight method.
 
-Vertical well, untapered string (one drill pipe size + BHA), surface BOP
-stack, Driller's method.
+Vertical well, untapered string, surface BOP stack - the same well as
+example_well.py, so the two methods can be compared side by side.
 
-Run it with:  python examples/example_well.py
+Run it with:  python examples/wait_and_weight_well.py
 """
 
-from kill_sheet_printer import DRILLERS, WAIT_AND_WEIGHT, print_kill_sheet  # noqa: F401
+from kill_sheet_printer import WAIT_AND_WEIGHT, print_kill_sheet
+from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS  # noqa: F401
 
 print_kill_sheet(
     title="KILL SHEET - vertical well, untapered string, surface BOP stack",
-    method=DRILLERS,
+    method=WAIT_AND_WEIGHT,
+    step_method=TEN_STEPS,              # default; or EVERY_100_STROKES
     # Well data
     bit_tvd_ft=11_500,
     shoe_tvd_ft=5_150,
@@ -22,6 +24,12 @@ print_kill_sheet(
     sidpp_psi=650,
     sicp_psi=800,
     scr_pressure_psi=750,               # at 30 spm
+    # Wait and Weight: retake SIDPP (bump the float) and SICP just before
+    # start-up, and the drill pipe reading once at kill rate
+    # (leave observed_icp_psi as None until you have it)
+    sidpp_at_start_psi=650,
+    sicp_at_start_psi=800,
+    observed_icp_psi=None,
     # Pump and volumes: (name, capacity bbl/ft, length ft)
     pump_output_bbl_per_stk=0.117,
     surface_line_volume_bbl=0,          # leave as 0 if unknown

@@ -25,9 +25,9 @@ def test_pressure_drop_per_100_strokes_rounds_down():
     assert pressure_drop_per_100_strokes(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == 35
 
 
-def test_pressure_schedule():
+def test_every_100_strokes_schedule():
     # ICP minus 35 psi every 100 strokes; FCP at surface-to-bit strokes.
-    assert pressure_schedule(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == [
+    assert pressure_schedule(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES, EVERY_100_STROKES) == [
         (0, 1400),
         (100, 1365),
         (200, 1330),
@@ -49,9 +49,9 @@ def test_pressure_schedule():
     ]
 
 
-def test_every_100_strokes_is_the_default():
+def test_ten_steps_is_the_default():
     assert pressure_schedule(ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES) == pressure_schedule(
-        ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES, EVERY_100_STROKES
+        ICP_PSI, FCP_PSI, SURFACE_TO_BIT_STROKES, TEN_STEPS
     )
 
 
@@ -96,7 +96,7 @@ def test_unknown_step_method_is_rejected():
 def test_schedule_when_strokes_are_an_exact_multiple_of_100():
     # 1,600 strokes: no partial step; the 1,600-stroke row is FCP.
     # (1,400 - 829) / 16 = 35.69 -> 35 psi/100 stks
-    schedule = pressure_schedule(ICP_PSI, FCP_PSI, 1600)
+    schedule = pressure_schedule(ICP_PSI, FCP_PSI, 1600, EVERY_100_STROKES)
     assert schedule[0] == (0, 1400)
     assert schedule[-2] == (1500, 875)      # 1,400 - 35 x 15
     assert schedule[-1] == (1600, 829)

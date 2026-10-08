@@ -5,8 +5,8 @@ is stepped down from ICP to FCP. The schedule ends at FCP when kill mud
 reaches the bit.
 
 Two ways to step the pressure down (the user chooses):
-  - EVERY_100_STROKES: a step every 100 strokes
-  - TEN_STEPS:         10 equal steps of (surface-to-bit strokes / 10)
+  - TEN_STEPS (default): 10 equal steps of (surface-to-bit strokes / 10)
+  - EVERY_100_STROKES:   a step every 100 strokes
 
 Rounding:
   - The pressure drop per step is rounded DOWN to a whole psi (IADC rule).
@@ -46,10 +46,10 @@ def pressure_drop_per_step_for_ten_steps(icp_psi, fcp_psi):
     return round_down_to_whole_number((icp_psi - fcp_psi) / 10)
 
 
-def pressure_schedule(icp_psi, fcp_psi, surface_to_bit_strokes, step_method=EVERY_100_STROKES):
+def pressure_schedule(icp_psi, fcp_psi, surface_to_bit_strokes, step_method=TEN_STEPS):
     """Drill pipe pressure schedule as a list of (strokes, pressure_psi) rows.
 
-    step_method is EVERY_100_STROKES (the default) or TEN_STEPS.
+    step_method is TEN_STEPS (the default) or EVERY_100_STROKES.
 
     Starts at (0, ICP), drops by the rounded-down drop each step, and ends
     at (surface-to-bit strokes, FCP).

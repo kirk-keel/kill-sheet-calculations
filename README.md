@@ -30,8 +30,9 @@ all types of wells using every well control technique at their disposal.
   MD and TVD. Every point on the kill sheet shows MD, TVD and strokes
 - **Driller's method:** start-up, what to hold on which gauge and for how many strokes,
   shut-down, and the shut-in checks for both circulations
-- **Wait and Weight:** drill pipe pressure schedule from ICP to FCP, every 100
-  strokes or in 10 equal steps
+- **Wait and Weight:** weight up, start-up on the retaken SICP, an ICP check at kill
+  rate (recalculated if the drill pipe reads more than 10 psi off), and a drill pipe
+  step-down schedule from ICP to FCP in 10 equal steps (default) or every 100 strokes
 
 ## How to run it
 
@@ -43,6 +44,7 @@ cd kill-sheet-calculations
 pip install -e ".[dev]"
 
 python examples/example_well.py      # baseline: vertical, untapered string
+python examples/wait_and_weight_well.py   # baseline well, Wait and Weight
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -55,7 +57,10 @@ To work your own well, copy one of the example files and change the numbers.
 List the drill string top down and the annulus bit up, one line per pipe size
 or hole/casing size, with lengths in MD. For a deviated or horizontal well also give
 the bit and shoe MD and the key points as (name, MD, TVD). The calculator stops with
-an error if the section lengths don't add up to the bit and shoe MD. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`.
+an error if the section lengths don't add up to the bit and shoe MD. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`. For Wait and Weight, `step_method` is
+`TEN_STEPS` (default) or `EVERY_100_STROKES`; enter the retaken SIDPP and SICP as
+`sidpp_at_start_psi` and `sicp_at_start_psi`, and the drill pipe reading at kill rate as
+`observed_icp_psi`.
 
 ## Conventions
 
@@ -72,8 +77,9 @@ an error if the section lengths don't add up to the bit and shoe MD. Set `method
 | Strokes | `Volume / Pump output` |
 | Strokes to a crossover | `Running total of rounded section volumes / Pump output` |
 | Surface to bit volume | `Surface lines (optional) + Drill string` |
+| W&W drop per step (10 steps, default) | `(ICP - FCP) / 10`, each step = `Surface-to-bit strokes / 10` |
 | W&W drop per 100 strokes | `(ICP - FCP) / (Surface-to-bit strokes / 100)` |
-| W&W drop per step (10 steps) | `(ICP - FCP) / 10`, each step = `Surface-to-bit strokes / 10` |
+| W&W recalculation (reads high) | `Actual SCR = Observed ICP - Retaken SIDPP`, `FCP = Actual SCR x (KMW / OMW)`, never lower than calculated FCP |
 
 ### MD and TVD
 
@@ -105,6 +111,19 @@ only tell the truth if that procedure is followed.
 - After the 1st circulation, SIDPP and SICP must both read the **original SIDPP**.
   If SICP is higher, strung-out gas is still in the annulus, so continue circulating.
 - After the 2nd circulation, SIDPP and SICP must both read **0 psi**. The well is dead.
+
+### Wait and Weight
+
+One circulation, with kill mud. Same start-up and shut-down as the Driller's method.
+
+| Stage | Gauge | Hold | For |
+|---|---|---|---|
+| Weight up | Pits | Weight up the active system to KMW; **retake SIDPP (bump the float) and SICP** just before start-up (gas may have migrated) | — |
+| Start-up | Casing | Constant at the **retaken SICP** while bringing the pump to kill rate | — |
+| ICP check | Drill pipe | Must read ICP ±10 psi. More than 10 psi **high**: **recalculate** ICP, FCP and the schedule from the reading; FCP is **never lower** than calculated. More than 10 psi **low**: a complication, so the calculated values are kept | — |
+| Hold | Drill pipe | **Step-down schedule** from ICP to FCP | Surface-to-bit strokes |
+| Hold | Drill pipe | **FCP** | Bit-to-surface strokes |
+| Shut-down / check | Both | Both read **0 psi** (±10 psi): the well is dead | — |
 
 ### Rounding: three rules
 
@@ -213,6 +232,40 @@ Annulus, bit up                              MD ft    TVD ft   Strokes
   surface                                         0         0     5,039
 ```
 
+Baseline well, Wait and Weight, from `python examples/wait_and_weight_well.py`
+(pressures and strokes are the same as above):
+
+```
+Wait and Weight
+  kill circulation (kill mud)
+    weight up  pits
+               weight up the active system to 11.5 ppg; retake SIDPP (bump the float) and SICP just before pump start-up
+    start-up   casing 800 psi
+               bring pump to kill rate holding casing pressure constant at the retaken SICP
+    hold       drill pipe 1,400 psi for 1,627 stks
+               follow the step-down schedule from ICP 1,400 to FCP 829 psi - kill mud surface to bit
+    hold       drill pipe 829 psi for 4,557 stks
+               hold FCP - kill mud bit to surface
+    shut-down  casing
+               slow pump to 0 holding casing pressure constant
+    check      drill pipe and casing 0 psi
+               both must read 0 psi (+/-10 psi) - the well is dead
+
+  Drill pipe step-down schedule (10 steps)
+    Strokes      psi
+          0    1,400
+        163    1,343
+        326    1,286
+        489    1,229
+        652    1,172
+        815    1,115
+        978    1,058
+      1,141    1,001
+      1,304      944
+      1,467      887
+      1,627      829
+```
+
 ## Roadmap
 
 Each step adds one complication, with hand-worked tests checked before any code is
@@ -231,7 +284,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, tapered string (**v0.4**)
 
 **Wait and Weight**
-- [ ] Vertical, untapered string (a straight-line schedule is already included)
+- [x] Vertical, untapered string (**v0.5**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
@@ -278,12 +331,15 @@ src/killsheet/
   formulas.py    KMW, ICP, FCP, MAMW, MAASP
   depths.py      MD and TVD: TVD at any MD from the key points
   strokes.py     volumes, strokes, crossovers and section length checks
+  kill_steps.py  kill steps, stages and shut-in gauge checks shared by every method
   drillers.py    Driller's method kill steps
-  schedule.py    Wait and Weight drill pipe pressure schedule
+  wait_and_weight.py  Wait and Weight kill steps, ICP check and recalculation
+  schedule.py    Wait and Weight drill pipe step-down schedule
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
   example_well.py        baseline: vertical, untapered string
+  wait_and_weight_well.py  baseline well, Wait and Weight
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

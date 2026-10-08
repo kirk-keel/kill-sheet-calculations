@@ -19,8 +19,10 @@ baseline must keep working and keep its tests.
   - `formulas.py` — KMW, ICP, FCP, MAMW, MAASP
   - `depths.py` — MD/TVD: `tvd_at_md` interpolates TVD between key points
   - `strokes.py` — section volumes, strokes, crossovers, partial sections, length checks
+  - `kill_steps.py` — KillStep, stage names, ±10 psi tolerance, gauge checks (shared)
   - `drillers.py` — Driller's method kill steps (the baseline method)
-  - `schedule.py` — Wait and Weight drill pipe pressure schedule, ICP to FCP
+  - `wait_and_weight.py` — Wait and Weight kill steps, ICP check, recalculation
+  - `schedule.py` — Wait and Weight drill pipe step-down schedule, ICP to FCP
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
 
@@ -68,10 +70,25 @@ the starting volume); annulus listed bit up.
   strokes. Shut-in check: SIDPP and SICP both read 0 (±10 psi) = well dead.
 - Gauge tolerance: ±10 psi (`GAUGE_TOLERANCE_PSI`).
 
-**Wait and Weight pressure schedule:** the user chooses the step method:
-- `EVERY_100_STROKES` (default): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
-- `TEN_STEPS`: exactly 10 steps of `surface-to-bit strokes / 10` (rounded to a whole
-  stroke); drop = `(ICP - FCP) / 10`
+**Wait and Weight** (user-confirmed), one circulation with kill mud:
+- Weight up the active system to KMW while shut in. RETAKE SIDPP (float bumped) and
+  SICP just before pump start-up (gas may migrate while weighting up) — inputs
+  `sidpp_at_start_psi`, `sicp_at_start_psi`. Retaken SIDPP must be > 0.
+- Start-up: hold casing constant at the retaken SICP while bringing the pump to kill rate.
+- Once at kill rate, follow the step-down chart on the drill pipe until kill mud is at
+  the bit, then hold FCP until kill mud is at surface. Same shut-down; check 0 ±10 psi.
+- ICP check at kill rate (`kill_pressures_at_kill_rate`):
+  - within ±10 psi: use calculated ICP and FCP.
+  - more than 10 psi HIGH: RECALCULATE — actual SCR = observed ICP - RETAKEN SIDPP;
+    ICP = observed; FCP = actual SCR x (KMW / OMW) but NEVER LOWER than the calculated
+    FCP (user rule: "if anything the FCP should be higher"); rebuild the schedule.
+  - more than 10 psi LOW: a complication (separate topic) — keep calculated ICP and
+    FCP; never recalculate lower. KMW always comes from the original SIDPP.
+
+**Wait and Weight step-down schedule:** the user chooses the step method:
+- `TEN_STEPS` (DEFAULT, user rule): exactly 10 steps of `surface-to-bit strokes / 10`
+  (rounded to a whole stroke); drop = `(ICP - FCP) / 10`
+- `EVERY_100_STROKES` (option): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
 
 The drop is always rounded **DOWN** to a whole psi. Each row = `ICP - drop x steps`;
 the last row is FCP at surface-to-bit strokes. The schedule ends at FCP — no rows after.
@@ -153,8 +170,7 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
-- Wait and Weight:       (a)-(d), (a) is next  [a straight-line schedule for (a) already exists in
-                         schedule.py; phase (a) completes and verifies it]
+- Wait and Weight:       (a) DONE v0.5, (b) next, then (c), (d)
 - Volumetric method and lubricate and bleed: (a)-(d)
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)

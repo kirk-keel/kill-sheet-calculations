@@ -14,13 +14,19 @@ from killsheet.formulas import (
     maasp,
     max_allowable_mud_weight,
 )
-from killsheet.schedule import EVERY_100_STROKES, pressure_schedule
+from killsheet.schedule import TEN_STEPS, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
     check_section_lengths,
     strokes_to_length,
     surface_to_bit_strokes,
+)
+from killsheet.wait_and_weight import (
+    ICP_MATCHES,
+    ICP_RECALCULATED,
+    kill_pressures_at_kill_rate,
+    wait_and_weight_method,
 )
 
 DRILLERS = "Driller's method"
@@ -59,13 +65,23 @@ def print_kill_sheet(
     key_points=(),
     surface_line_volume_bbl=0,
     method=DRILLERS,
-    step_method=EVERY_100_STROKES,
+    step_method=TEN_STEPS,
+    sidpp_at_start_psi=None,
+    sicp_at_start_psi=None,
+    observed_icp_psi=None,
 ):
     """Calculate and print the whole kill sheet.
 
     Vertical well: leave out bit_md_ft, shoe_md_ft and key_points (MD = TVD).
     Deviated or horizontal well: give the bit and shoe MD, and key points
     such as KOP, end of build and the heel as (name, MD, TVD).
+
+    Wait and Weight only:
+      sidpp_at_start_psi - SIDPP retaken (float bumped) just before pump start-up
+                           (defaults to sidpp_psi)
+      sicp_at_start_psi  - SICP retaken just before pump start-up (defaults to sicp_psi)
+      observed_icp_psi   - drill pipe reading once at kill rate; if it reads more than
+                           10 psi HIGH, ICP/FCP are recalculated (FCP never lower)
     """
     bit_md_ft = bit_tvd_ft if bit_md_ft is None else bit_md_ft
     shoe_md_ft = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
@@ -130,23 +146,45 @@ def print_kill_sheet(
 
     if method == DRILLERS:
         print(DRILLERS)
-        circulation = None
-        for step in drillers_method(sidpp_psi, sicp_psi, icp, fcp, stb, btsurf):
-            if step.circulation != circulation:
-                circulation = step.circulation
-                print(f"  {circulation}")
-            line = f"    {step.stage:<11}{step.gauge}"
-            if step.hold_psi is not None:
-                line += f" {step.hold_psi:,} psi"
-            if step.strokes is not None:
-                line += f" for {step.strokes:,} stks"
-            print(line)
-            print(f"{'':15}{step.note}")
+        print_steps(drillers_method(sidpp_psi, sicp_psi, icp, fcp, stb, btsurf))
     elif method == WAIT_AND_WEIGHT:
-        print(f"{WAIT_AND_WEIGHT} - drill pipe pressure schedule ({step_method})")
-        print("  Strokes      psi")
+        print(WAIT_AND_WEIGHT)
+        sidpp_at_start = sidpp_psi if sidpp_at_start_psi is None else sidpp_at_start_psi
+        sicp_at_start = sicp_psi if sicp_at_start_psi is None else sicp_at_start_psi
+        if observed_icp_psi is not None:
+            print(f"  ICP check at kill rate: calculated {icp:,} psi, drill pipe reads {observed_icp_psi:,} psi")
+            icp, fcp, status = kill_pressures_at_kill_rate(
+                icp, fcp, observed_icp_psi, sidpp_at_start, kmw, original_mud_weight_ppg
+            )
+            if status == ICP_MATCHES:
+                print("  within +/-10 psi - use the calculated ICP and FCP")
+            elif status == ICP_RECALCULATED:
+                print(f"  more than 10 psi high - RECALCULATED from retaken SIDPP {sidpp_at_start:,} psi: "
+                      f"ICP {icp:,} psi, FCP {fcp:,} psi (FCP is never lower than calculated)")
+            else:
+                print("  more than 10 psi low - a complication; calculated ICP and FCP are kept "
+                      "(never recalculated lower)")
+        print_steps(wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf))
+        print()
+        print(f"  Drill pipe step-down schedule ({step_method})")
+        print("    Strokes      psi")
         for stks, pressure in pressure_schedule(icp, fcp, stb, step_method):
-            print(f"  {stks:>7,}  {pressure:>7,}")
-        print(f"  then hold FCP {fcp:,} psi for {btsurf:,} stks, bit to surface")
+            print(f"    {stks:>7,}  {pressure:>7,}")
     else:
         raise ValueError(f"method must be {DRILLERS!r} or {WAIT_AND_WEIGHT!r}")
+
+
+def print_steps(steps):
+    """Print kill steps grouped by circulation."""
+    circulation = None
+    for step in steps:
+        if step.circulation != circulation:
+            circulation = step.circulation
+            print(f"  {circulation}")
+        line = f"    {step.stage:<11}{step.gauge}"
+        if step.hold_psi is not None:
+            line += f" {step.hold_psi:,} psi"
+        if step.strokes is not None:
+            line += f" for {step.strokes:,} stks"
+        print(line)
+        print(f"{'':15}{step.note}")
