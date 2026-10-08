@@ -152,8 +152,8 @@ every well/string type in this order: (a) vertical untapered, (b) vertical taper
 Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 
 Surface stack:
-- Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) next
-- Wait and Weight:       (a)-(d)  [a straight-line schedule for (a) already exists in
+- Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
+- Wait and Weight:       (a)-(d), (a) is next  [a straight-line schedule for (a) already exists in
                          schedule.py; phase (a) completes and verifies it]
 - Volumetric method and lubricate and bleed: (a)-(d)
 - Bullheading:           (a)-(d)
@@ -184,6 +184,8 @@ python examples/example_well.py    # baseline well (untapered string)
 python examples/tapered_well.py    # tapered string
 python examples/deviated_well.py   # deviated, untapered
 python examples/horizontal_well.py # horizontal, untapered
+python examples/deviated_tapered_well.py    # deviated, tapered
+python examples/horizontal_tapered_well.py  # horizontal, tapered
 ```
 
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each

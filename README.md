@@ -9,8 +9,9 @@ rules, with an extra safety factor on kill mud weight.
 **Version 0.1 is the simplest kill:** a vertical well, an untapered string
 (one drill pipe size plus a BHA of HWDP and drill collars), a surface BOP stack,
 and the Driller's method. Everything after that is built on top of it, one
-complication at a time. **Version 0.2** adds tapered strings, and **version 0.3** adds
-deviated and horizontal wells. See the [roadmap](#roadmap).
+complication at a time. **Version 0.2** adds tapered strings, **version 0.3** adds
+deviated and horizontal wells, and **version 0.4** completes the Driller's method on a
+surface stack for every well and string type. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -45,6 +46,8 @@ python examples/example_well.py      # baseline: vertical, untapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
+python examples/deviated_tapered_well.py     # deviated, tapered string
+python examples/horizontal_tapered_well.py   # horizontal, tapered string
 pytest                               # run the tests
 ```
 
@@ -225,7 +228,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Vertical, untapered string (**v0.1**, start-up/shut-down and shut-in checks **v0.1.1**)
 - [x] Vertical, tapered string (**v0.2**)
 - [x] Deviated and horizontal, untapered string (**v0.3**)
-- [ ] Deviated and horizontal, tapered string
+- [x] Deviated and horizontal, tapered string (**v0.4**)
 
 **Wait and Weight**
 - [ ] Vertical, untapered string (a straight-line schedule is already included)
@@ -284,6 +287,8 @@ examples/
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
+  deviated_tapered_well.py     deviated, tapered string
+  horizontal_tapered_well.py   horizontal, tapered string
   kill_sheet_printer.py  prints a kill sheet (shared by both examples)
 .github/workflows/tests.yml   runs the tests on every push
 ```
