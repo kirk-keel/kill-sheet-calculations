@@ -14,7 +14,7 @@ from killsheet.formulas import (
     maasp,
     max_allowable_mud_weight,
 )
-from killsheet.schedule import TEN_STEPS, pressure_schedule
+from killsheet.schedule import STEP, TEN_STEPS, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
@@ -166,10 +166,11 @@ def print_kill_sheet(
                       "(never recalculated lower)")
         print_steps(wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf))
         print()
-        print(f"  Drill pipe step-down schedule ({step_method})")
-        print("    Strokes      psi")
-        for stks, pressure in pressure_schedule(icp, fcp, stb, step_method):
-            print(f"    {stks:>7,}  {pressure:>7,}")
+        print(f"  Drill pipe step-down schedule ({step_method}) - pressure follows the depth of the kill mud")
+        print("    Strokes   Kill mud MD ft      psi")
+        for row in pressure_schedule(icp, fcp, string, pump, surface_line_volume_bbl, step_method):
+            label = "" if row.label == STEP else f"   <- {row.label}"
+            print(f"    {row.strokes:>7,}  {row.md_ft:>15,}  {row.pressure_psi:>7,}{label}")
     else:
         raise ValueError(f"method must be {DRILLERS!r} or {WAIT_AND_WEIGHT!r}")
 

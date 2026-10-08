@@ -22,7 +22,7 @@ baseline must keep working and keep its tests.
   - `kill_steps.py` — KillStep, stage names, ±10 psi tolerance, gauge checks (shared)
   - `drillers.py` — Driller's method kill steps (the baseline method)
   - `wait_and_weight.py` — Wait and Weight kill steps, ICP check, recalculation
-  - `schedule.py` — Wait and Weight drill pipe step-down schedule, ICP to FCP
+  - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
 
@@ -85,13 +85,20 @@ the starting volume); annulus listed bit up.
   - more than 10 psi LOW: a complication (separate topic) — keep calculated ICP and
     FCP; never recalculate lower. KMW always comes from the original SIDPP.
 
-**Wait and Weight step-down schedule:** the user chooses the step method:
-- `TEN_STEPS` (DEFAULT, user rule): exactly 10 steps of `surface-to-bit strokes / 10`
-  (rounded to a whole stroke); drop = `(ICP - FCP) / 10`
-- `EVERY_100_STROKES` (option): drop = `(ICP - FCP) / (surface-to-bit strokes / 100)`
-
-The drop is always rounded **DOWN** to a whole psi. Each row = `ICP - drop x steps`;
-the last row is FCP at surface-to-bit strokes. The schedule ends at FCP — no rows after.
+**Wait and Weight step-down schedule** (user-approved, v0.5.1): pressure follows the
+DEPTH of the kill mud, never a straight line against strokes:
+- Vertical: `P = ICP - (ICP - FCP) x (MD of kill mud / bit MD)` — the "FCP form" (user
+  choice): lands exactly on FCP at the bit. The drop from ICP is rounded DOWN.
+- MD of kill mud after N strokes (`md_after_strokes`): volume = N x pump output (0.1 bbl)
+  minus surface lines; walk the string; inside a section MD = start + section length x
+  (volume left / ROUNDED section volume), so crossover strokes land exactly on crossovers.
+- Steps: `TEN_STEPS` (DEFAULT, user rule) = 10 steps of `surface-to-bit strokes / 10`
+  (whole strokes); `EVERY_100_STROKES` (option).
+- Every crossover is its own row (the inflection points, user rule); last row is FCP
+  at the bit. The schedule ends at FCP — no rows after.
+- WHY: a straight line vs strokes is only right for a single-ID string. With DP+HWDP+DC
+  it was up to 38 psi short (v0.5 bug, fixed v0.5.1); a 5" x 3-1/2" taper, 112 psi short.
+  Never go back to a straight line against strokes.
 
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a

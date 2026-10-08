@@ -11,6 +11,7 @@ from killsheet.strokes import (
     bit_to_surface_strokes,
     check_section_lengths,
     crossover_strokes,
+    md_after_strokes,
     section_volume,
     strokes_for_volume,
     strokes_to_length,
@@ -144,3 +145,25 @@ def test_section_lengths_that_add_up_pass():
 def test_section_lengths_that_dont_add_up_are_rejected(drill_string, open_hole, cased_hole, message):
     with pytest.raises(ValueError, match=message):
         check_section_lengths(drill_string, open_hole, cased_hole, 11_500, 5_150)
+
+
+@pytest.mark.parametrize(
+    "strokes, expected_md_ft",
+    [
+        (0, 0),
+        (163, 1_073),       # 19.1 bbl: 10,000 ft x (19.1 / 178.0) = 1,073 ft
+        (1521, 10_000),     # 178.0 bbl: bottom of the DP
+        (1588, 10_900),     # 185.8 bbl: bottom of the HWDP
+        (1600, 11_083),     # 187.2 bbl: 600 ft x (1.4 / 4.6) = 183 ft into the DC
+        (1627, 11_500),     # 190.4 bbl: the bit
+    ],
+)
+def test_md_after_strokes(strokes, expected_md_ft):
+    assert md_after_strokes(strokes, DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK) == expected_md_ft
+
+
+def test_md_after_strokes_with_surface_lines():
+    # 5.0 bbl of surface lines: 40 stks = 4.7 bbl hasn't reached the drill pipe yet
+    assert md_after_strokes(40, DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK, surface_line_volume_bbl=5.0) == 0
+    # 167 stks = 19.5 bbl - 5.0 = 14.5 bbl: 10,000 ft x (14.5 / 178.0) = 815 ft
+    assert md_after_strokes(167, DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK, surface_line_volume_bbl=5.0) == 815

@@ -32,7 +32,8 @@ all types of wells using every well control technique at their disposal.
   shut-down, and the shut-in checks for both circulations
 - **Wait and Weight:** weight up, start-up on the retaken SICP, an ICP check at kill
   rate (recalculated if the drill pipe reads more than 10 psi off), and a drill pipe
-  step-down schedule from ICP to FCP in 10 equal steps (default) or every 100 strokes
+  step-down schedule from ICP to FCP that follows the depth of the kill mud, in 10 equal
+  steps (default) or every 100 strokes, with every crossover shown
 
 ## How to run it
 
@@ -77,8 +78,9 @@ an error if the section lengths don't add up to the bit and shoe MD. Set `method
 | Strokes | `Volume / Pump output` |
 | Strokes to a crossover | `Running total of rounded section volumes / Pump output` |
 | Surface to bit volume | `Surface lines (optional) + Drill string` |
-| W&W drop per step (10 steps, default) | `(ICP - FCP) / 10`, each step = `Surface-to-bit strokes / 10` |
-| W&W drop per 100 strokes | `(ICP - FCP) / (Surface-to-bit strokes / 100)` |
+| W&W drill pipe pressure | `ICP - (ICP - FCP) x (MD of kill mud / Bit MD)`, drop rounded down |
+| W&W MD of kill mud | Walk down the string: `full sections + section length x (volume left / section volume)` |
+| W&W steps | 10 steps of `Surface-to-bit strokes / 10` (default), or every 100 strokes |
 | W&W recalculation (reads high) | `Actual SCR = Observed ICP - Retaken SIDPP`, `FCP = Actual SCR x (KMW / OMW)`, never lower than calculated FCP |
 
 ### MD and TVD
@@ -121,9 +123,18 @@ One circulation, with kill mud. Same start-up and shut-down as the Driller's met
 | Weight up | Pits | Weight up the active system to KMW; **retake SIDPP (bump the float) and SICP** just before start-up (gas may have migrated) | — |
 | Start-up | Casing | Constant at the **retaken SICP** while bringing the pump to kill rate | — |
 | ICP check | Drill pipe | Must read ICP ±10 psi. More than 10 psi **high**: **recalculate** ICP, FCP and the schedule from the reading; FCP is **never lower** than calculated. More than 10 psi **low**: a complication, so the calculated values are kept | — |
-| Hold | Drill pipe | **Step-down schedule** from ICP to FCP | Surface-to-bit strokes |
+| Hold | Drill pipe | **Step-down schedule** from ICP to FCP, following the depth of the kill mud | Surface-to-bit strokes |
 | Hold | Drill pipe | **FCP** | Bit-to-surface strokes |
 | Shut-down / check | Both | Both read **0 psi** (±10 psi): the well is dead | — |
+
+**Why the schedule follows depth, not strokes.** The drill pipe pressure comes down
+because the kill mud adds hydrostatic, and hydrostatic depends on how *deep* the kill
+mud is. Strokes only match depth when the whole string has one ID. Drill pipe, HWDP,
+collars and tapered strings all have different IDs, so each stroke moves the kill mud
+a different distance and the schedule bends at every crossover. A straight line against
+strokes takes pressure off before the kill mud is deep enough to replace it: on the
+baseline well it is up to 38 psi short at the HWDP crossover, and 112 psi short at the
+crossover of a 5" x 3-1/2" tapered string. (Fixed in v0.5.1.)
 
 ### Rounding: three rules
 
@@ -133,9 +144,9 @@ Based on the [IADC WellSharp Formula Sheet – Field Units, Rev 4 (2025)](https:
    11.0 ppg becomes 11.1 ppg. An exact kill weight only *balances* the formation;
    the extra 0.1 ppg is the minimum safety factor that *kills* the well.
 2. **Anything that is a maximum is rounded DOWN.** MAMW to 0.1 ppg and MAASP to
-   a whole psi, so a limit is never overstated. The Wait and Weight pressure drop
-   per step is also rounded down (IADC), so the schedule never steps pressure down
-   faster than the straight line from ICP to FCP.
+   a whole psi, so a limit is never overstated. The Wait and Weight drop from ICP
+   is also rounded down (IADC), so the drill pipe pressure is never below the exact
+   pressure for the depth the kill mud has reached.
 3. **Everything else uses academic rounding** (.5 goes up) to IADC's accuracy:
    pressures and strokes to a whole number, volumes to 0.1 bbl.
 
@@ -251,19 +262,21 @@ Wait and Weight
     check      drill pipe and casing 0 psi
                both must read 0 psi (+/-10 psi) - the well is dead
 
-  Drill pipe step-down schedule (10 steps)
-    Strokes      psi
-          0    1,400
-        163    1,343
-        326    1,286
-        489    1,229
-        652    1,172
-        815    1,115
-        978    1,058
-      1,141    1,001
-      1,304      944
-      1,467      887
-      1,627      829
+  Drill pipe step-down schedule (10 steps) - pressure follows the depth of the kill mud
+    Strokes   Kill mud MD ft      psi
+          0                0    1,400
+        163            1,073    1,347
+        326            2,140    1,294
+        489            3,213    1,241
+        652            4,287    1,188
+        815            5,360    1,134
+        978            6,427    1,081
+      1,141            7,500    1,028
+      1,304            8,573      975
+      1,467            9,640      922
+      1,521           10,000      904   <- crossover
+      1,588           10,900      859   <- crossover
+      1,627           11,500      829   <- bit
 ```
 
 ## Roadmap
@@ -284,7 +297,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, tapered string (**v0.4**)
 
 **Wait and Weight**
-- [x] Vertical, untapered string (**v0.5**)
+- [x] Vertical, untapered string (**v0.5**; schedule by depth of kill mud **v0.5.1**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
@@ -334,7 +347,7 @@ src/killsheet/
   kill_steps.py  kill steps, stages and shut-in gauge checks shared by every method
   drillers.py    Driller's method kill steps
   wait_and_weight.py  Wait and Weight kill steps, ICP check and recalculation
-  schedule.py    Wait and Weight drill pipe step-down schedule
+  schedule.py    Wait and Weight drill pipe step-down schedule, by depth of kill mud
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/

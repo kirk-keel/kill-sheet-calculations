@@ -109,6 +109,31 @@ def strokes_to_length(sections, length_ft, pump_output_bbl_per_stk, starting_vol
     return strokes_for_volume(volume_bbl, pump_output_bbl_per_stk)
 
 
+def md_after_strokes(strokes, drill_string_sections, pump_output_bbl_per_stk, surface_line_volume_bbl=0):
+    """MD (whole ft) of the kill mud front after pumping a number of strokes.
+
+        Volume pumped   = Strokes x Pump output (rounded to 0.1 bbl) - Surface line volume
+        MD of kill mud  = Length of full sections filled
+                          + Section length x (Volume left over / Section volume)
+
+    The reverse of strokes_to_length(): it walks down the drill string,
+    section by section, until the pumped volume runs out. Using the section's
+    rounded volume means a crossover's strokes land exactly on the crossover.
+    """
+    volume_bbl = round_to_tenth(strokes * pump_output_bbl_per_stk) - surface_line_volume_bbl
+    if volume_bbl <= 0:
+        return 0
+    md_ft = 0
+    filled_bbl = 0
+    for capacity_bbl_per_ft, length_ft in drill_string_sections:
+        section_bbl = section_volume(capacity_bbl_per_ft, length_ft)
+        if volume_bbl <= filled_bbl + section_bbl:
+            return round_to_whole_number(md_ft + length_ft * (volume_bbl - filled_bbl) / section_bbl)
+        filled_bbl = round_to_tenth(filled_bbl + section_bbl)
+        md_ft += length_ft
+    return md_ft
+
+
 def total_length(sections):
     """Total length (ft) of a list of sections."""
     return sum(length_ft for _capacity, length_ft in sections)

@@ -8,7 +8,7 @@ bit-to-surface 4,557 strokes.
 import pytest
 
 from killsheet.kill_steps import CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
-from killsheet.schedule import TEN_STEPS, pressure_schedule
+from killsheet.schedule import BIT, CROSSOVER, STEP, pressure_schedule
 from killsheet.wait_and_weight import (
     ICP_MATCHES,
     ICP_READS_LOW,
@@ -99,18 +99,21 @@ def test_retaken_sidpp_of_zero_is_rejected():
 
 
 def test_schedule_rebuilt_after_recalculation():
-    # ICP 1,450, FCP 885: drop = (1,450 - 885) / 10 = 56.5 -> DOWN -> 56 psi; 163 strokes per step
+    # ICP 1,450, FCP 885 on the baseline string: drop to each row = 565 x MD / 11,500, rounded DOWN
     icp, fcp, _status = at_kill_rate(1450)
-    assert pressure_schedule(icp, fcp, SURFACE_TO_BIT_STROKES, TEN_STEPS) == [
-        (0, 1450),
-        (163, 1394),
-        (326, 1338),
-        (489, 1282),
-        (652, 1226),
-        (815, 1170),
-        (978, 1114),
-        (1141, 1058),
-        (1304, 1002),
-        (1467, 946),
-        (1627, 885),
+    baseline_string = [(0.0178, 10_000), (0.0087, 900), (0.0077, 600)]
+    assert [tuple(row) for row in pressure_schedule(icp, fcp, baseline_string, 0.117)] == [
+        (0, 0, 1450, STEP),
+        (163, 1_073, 1398, STEP),
+        (326, 2_140, 1345, STEP),
+        (489, 3_213, 1293, STEP),
+        (652, 4_287, 1240, STEP),
+        (815, 5_360, 1187, STEP),
+        (978, 6_427, 1135, STEP),
+        (1141, 7_500, 1082, STEP),
+        (1304, 8_573, 1029, STEP),
+        (1467, 9_640, 977, STEP),
+        (1521, 10_000, 959, CROSSOVER),
+        (1588, 10_900, 915, CROSSOVER),
+        (1627, 11_500, 885, BIT),
     ]
