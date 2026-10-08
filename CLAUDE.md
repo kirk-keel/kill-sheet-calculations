@@ -17,7 +17,8 @@ baseline must keep working and keep its tests.
 - Package lives in `src/killsheet/`, tests in `tests/` (pytest), one test file per module:
   - `rounding.py` — the rounding helpers (the only place rounding is done)
   - `formulas.py` — KMW, ICP, FCP, MAMW, MAASP
-  - `strokes.py` — section volumes and surface-to-bit / bit-to-shoe / bit-to-surface strokes
+  - `depths.py` — MD/TVD: `tvd_at_md` interpolates TVD between key points
+  - `strokes.py` — section volumes, strokes, crossovers, partial sections, length checks
   - `drillers.py` — Driller's method kill steps (the baseline method)
   - `schedule.py` — Wait and Weight drill pipe pressure schedule, ICP to FCP
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
@@ -37,6 +38,17 @@ baseline must keep working and keep its tests.
 is rounded to 0.1 bbl, totals are the sum of rounded section volumes, and strokes
 = total volume / pump output, rounded to a whole stroke. Surface line volume is an
 optional input to surface-to-bit strokes; if the user doesn't have it, it is 0.
+
+**MD and TVD** (user rule: every point shows MD AND TVD; interpolate what isn't known):
+- Pressures use TVD (KMW at bit TVD, MAMW/MAASP at shoe TVD). Volumes/strokes use MD.
+- Key points are (name, MD, TVD): KOP, end of build, heel, etc. Surface (0, 0), the
+  shoe and the bit are always included. TVD between them = straight-line interpolation,
+  rounded to a whole foot. Exact in vertical/tangent/horizontal; an estimate in a build.
+- A point partway through a section: partial section volume = capacity x length used,
+  rounded to 0.1 bbl, added to the rounded running total (same as crossovers).
+- `check_section_lengths` refuses to run if drill string != bit MD, open hole !=
+  bit MD - shoe MD, or cased hole != shoe MD. TVD may never exceed MD.
+- Vertical well = the case where MD = TVD (bit_md_ft / shoe_md_ft default to TVD).
 
 **Crossovers:** `crossover_strokes(sections, pump_output, starting_volume_bbl=0)` gives
 strokes to the END of each section. Running total = sum of ROUNDED section volumes,
@@ -134,22 +146,32 @@ get it verified before committing.
 
 v0.1.1: Driller's start-up/shut-down procedure and shut-in checks (±10 psi).
 
-Roadmap (one complication at a time):
-6. DONE (v0.2): tapered string, vertical well, Driller's method — strokes to each
-   drill string and annulus crossover
-7. Deviated and horizontal wells — MD and TVD at key points
-8. Volumetric method and bullheading
-9. Subsea BOP stack — choke line friction, riser margin, choke line strokes
-10. Web page interface — including the auto-generated kill plot beside the table:
-    forecast drill pipe AND annulus pressure vs strokes, showing the inflection
-    point at each pipe change (deferred here from Phase 6 by the user)
+Roadmap (user-defined, one complication at a time). Each method is covered for
+every well/string type in this order: (a) vertical untapered, (b) vertical tapered,
+(c) deviated AND horizontal untapered, (d) deviated AND horizontal tapered.
+Order: surface stack (all methods) -> web page -> subsea stack (all methods).
+
+Surface stack:
+- Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) next
+- Wait and Weight:       (a)-(d)  [a straight-line schedule for (a) already exists in
+                         schedule.py; phase (a) completes and verifies it]
+- Volumetric method and lubricate and bleed: (a)-(d)
+- Bullheading:           (a)-(d)
+- Reverse circulation:   (a)-(d)
+
+Web page (user: AFTER the surface stack is complete, BEFORE subsea):
+- Including the auto-generated kill plot beside the table: forecast drill pipe AND
+  annulus pressure vs strokes, showing the inflection point at each pipe change
+
+Subsea stack (adds choke line friction, riser margin, choke line volume/strokes):
+- Every method above, (a)-(d)
 
 ## Git / GitHub
 
 - Repo: https://github.com/kirk-keel/kill-sheet-calculations (public, GitHub account `kirk-keel`)
 - Default branch: `main`. Commit at the end of each phase once the user approves.
 - License: MIT (`LICENSE`), copyright Kirk Keel.
-- CI: `.github/workflows/tests.yml` runs pytest and both example scripts on Python
+- CI: `.github/workflows/tests.yml` runs pytest and every `examples/*_well.py` on Python
   3.10–3.13 on every push and PR.
 - Release tags: v0.1, v0.1.1, v0.2 ...
 
@@ -160,6 +182,8 @@ pip install -e ".[dev]"            # install package + pytest in editable mode
 pytest                             # run tests
 python examples/example_well.py    # baseline well (untapered string)
 python examples/tapered_well.py    # tapered string
+python examples/deviated_well.py   # deviated, untapered
+python examples/horizontal_well.py # horizontal, untapered
 ```
 
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each

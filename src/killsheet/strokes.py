@@ -74,6 +74,65 @@ def crossover_strokes(sections, pump_output_bbl_per_stk, starting_volume_bbl=0):
     return strokes
 
 
+def volume_to_length(sections, length_ft):
+    """Volume (bbl) of the first length_ft of a list of sections, rounded to 0.1 bbl.
+
+    Used for a point partway through a section (e.g. KOP in the drill pipe):
+    only the part of that section up to the point is counted.
+
+        Partial section volume = Capacity x Length used (rounded to 0.1 bbl)
+        Volume = Running total of rounded section volumes
+    """
+    remaining_ft = length_ft
+    running_volume_bbl = 0
+    for capacity_bbl_per_ft, section_length_ft in sections:
+        if remaining_ft <= 0:
+            break
+        used_ft = min(section_length_ft, remaining_ft)
+        running_volume_bbl = round_to_tenth(running_volume_bbl + section_volume(capacity_bbl_per_ft, used_ft))
+        remaining_ft -= used_ft
+    if remaining_ft > 0:
+        raise ValueError(f"{length_ft:,} ft is longer than the sections ({length_ft - remaining_ft:,} ft)")
+    return running_volume_bbl
+
+
+def strokes_to_length(sections, length_ft, pump_output_bbl_per_stk, starting_volume_bbl=0):
+    """Strokes to pump through the first length_ft of a list of sections.
+
+        Strokes = (Starting volume + Volume to that length) / Pump output
+
+    Drill string: length = MD of the point (sections top down; surface
+                  lines as the starting volume). Shows where the kill mud is.
+    Annulus:      length = bit MD - MD of the point (sections bit up).
+    """
+    volume_bbl = round_to_tenth(starting_volume_bbl + volume_to_length(sections, length_ft))
+    return strokes_for_volume(volume_bbl, pump_output_bbl_per_stk)
+
+
+def total_length(sections):
+    """Total length (ft) of a list of sections."""
+    return sum(length_ft for _capacity, length_ft in sections)
+
+
+def check_section_lengths(drill_string_sections, open_hole_annulus_sections,
+                          cased_hole_annulus_sections, bit_md_ft, shoe_md_ft):
+    """Raise ValueError if the section lengths don't add up - a typo in a
+    length would otherwise give wrong strokes without any warning.
+
+        Drill string length       = Bit MD
+        Open hole annulus length  = Bit MD - Shoe MD
+        Cased hole annulus length = Shoe MD
+    """
+    checks = [
+        ("Drill string", total_length(drill_string_sections), bit_md_ft),
+        ("Open hole annulus", total_length(open_hole_annulus_sections), bit_md_ft - shoe_md_ft),
+        ("Cased hole annulus", total_length(cased_hole_annulus_sections), shoe_md_ft),
+    ]
+    for name, actual_ft, expected_ft in checks:
+        if actual_ft != expected_ft:
+            raise ValueError(f"{name} sections add up to {actual_ft:,} ft MD but should be {expected_ft:,} ft")
+
+
 def bit_to_shoe_strokes(open_hole_annulus_sections, pump_output_bbl_per_stk):
     """Strokes to pump from the bit up to the casing shoe.
 

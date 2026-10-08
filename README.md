@@ -9,7 +9,8 @@ rules, with an extra safety factor on kill mud weight.
 **Version 0.1 is the simplest kill:** a vertical well, an untapered string
 (one drill pipe size plus a BHA of HWDP and drill collars), a surface BOP stack,
 and the Driller's method. Everything after that is built on top of it, one
-complication at a time. **Version 0.2** adds tapered strings. See the [roadmap](#roadmap).
+complication at a time. **Version 0.2** adds tapered strings, and **version 0.3** adds
+deviated and horizontal wells. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -24,6 +25,8 @@ all types of wells using every well control technique at their disposal.
 - **Strokes:** surface to bit (with optional surface line volume), bit to shoe, bit to surface
 - **Crossovers:** strokes to each pipe change in the drill string (where the kill mud
   is) and in the annulus, bit up. Works for untapered and tapered strings
+- **Deviated and horizontal wells:** enter key points (KOP, end of build, heel) with
+  MD and TVD. Every point on the kill sheet shows MD, TVD and strokes
 - **Driller's method:** start-up, what to hold on which gauge and for how many strokes,
   shut-down, and the shut-in checks for both circulations
 - **Wait and Weight:** drill pipe pressure schedule from ICP to FCP, every 100
@@ -38,14 +41,18 @@ git clone https://github.com/kirk-keel/kill-sheet-calculations.git
 cd kill-sheet-calculations
 pip install -e ".[dev]"
 
-python examples/example_well.py   # baseline well: untapered string
-python examples/tapered_well.py   # tapered string
-pytest                            # run the tests
+python examples/example_well.py      # baseline: vertical, untapered string
+python examples/tapered_well.py      # vertical, tapered string
+python examples/deviated_well.py     # deviated (build and hold), untapered string
+python examples/horizontal_well.py   # horizontal, untapered string
+pytest                               # run the tests
 ```
 
 To work your own well, copy one of the example files and change the numbers.
 List the drill string top down and the annulus bit up, one line per pipe size
-or hole/casing size. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`.
+or hole/casing size, with lengths in MD. For a deviated or horizontal well also give
+the bit and shoe MD and the key points as (name, MD, TVD). The calculator stops with
+an error if the section lengths don't add up to the bit and shoe MD. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`.
 
 ## Conventions
 
@@ -64,6 +71,18 @@ or hole/casing size. Set `method` to `DRILLERS` or `WAIT_AND_WEIGHT`.
 | Surface to bit volume | `Surface lines (optional) + Drill string` |
 | W&W drop per 100 strokes | `(ICP - FCP) / (Surface-to-bit strokes / 100)` |
 | W&W drop per step (10 steps) | `(ICP - FCP) / 10`, each step = `Surface-to-bit strokes / 10` |
+
+### MD and TVD
+
+| Uses **TVD** (pressure) | Uses **MD** (volume) |
+|---|---|
+| Kill mud weight (bit TVD) | Section lengths, volumes, strokes |
+| MAMW and MAASP (shoe TVD) | Crossovers and key point strokes |
+
+TVD at any MD is interpolated in a straight line between the key points either side:
+`TVD = TVD1 + (MD - MD1) x (TVD2 - TVD1) / (MD2 - MD1)`. That is exact in vertical,
+tangent and horizontal sections. In a build section it's an estimate, so add key
+points through the build for a closer answer. Depths are rounded to a whole foot.
 
 ### Driller's method
 
@@ -124,16 +143,16 @@ Surface to bit                  1,627 stks
 Bit to shoe                     2,405 stks
 Bit to surface                  4,557 stks
 
-Drill string crossovers (top down)     Depth ft   Strokes
-  bottom of 5" 19.5# DP                  10,000     1,521
-  bottom of 5" HWDP                      10,900     1,588
-  bottom of 6-1/2" DC                    11,500     1,627
+Drill string, top down (kill mud)            MD ft    TVD ft   Strokes
+  bottom of 5" 19.5# DP                      10,000    10,000     1,521
+  bottom of 5" HWDP                          10,900    10,900     1,588
+  bit                                        11,500    11,500     1,627
 
-Annulus crossovers (bit up)            Depth ft   Strokes
-  top of DC x 8-1/2" hole                10,900       150
-  top of HWDP x 8-1/2" hole              10,000       503
-  top of DP x 8-1/2" hole                 5,150     2,405
-  top of DP x 9-5/8" casing                   0     4,557
+Annulus, bit up                              MD ft    TVD ft   Strokes
+  top of DC x 8-1/2" hole                    10,900    10,900       150
+  top of HWDP x 8-1/2" hole                  10,000    10,000       503
+  shoe / top of DP x 8-1/2" hole              5,150     5,150     2,405
+  surface                                         0         0     4,557
 
 Driller's method
   1st circulation (original mud)
@@ -158,50 +177,95 @@ Driller's method
                both must read 0 psi (+/-10 psi) - the well is dead
 ```
 
-Tapered string, from `python examples/tapered_well.py` (Driller's steps omitted here):
+Deviated well, from `python examples/deviated_well.py` (Driller's steps omitted here).
+Pressures use TVD, strokes use MD, and TVD between key points is interpolated:
 
 ```
-KILL SHEET - vertical well, tapered string, surface BOP stack
+KILL SHEET - deviated well, untapered string, surface BOP stack
 ====================================================
 Kill mud weight                  11.5 ppg
 Initial circulating pressure    1,400 psi
 Final circulating pressure        829 psi
-Max allowable mud weight         12.2 ppg
-MAASP (original mud)              889 psi
-MAASP (after kill)                345 psi
+Max allowable mud weight         14.6 ppg
+MAASP (original mud)            1,124 psi
+MAASP (after kill)                830 psi
 
-Surface to bit                  1,326 stks
-Bit to shoe                       394 stks
-Bit to surface                  1,796 stks
+Surface to bit                  1,812 stks
+Bit to shoe                     2,791 stks
+Bit to surface                  5,039 stks
 
-Drill string crossovers (top down)     Depth ft   Strokes
-  bottom of 5" 19.5# DP                   7,000     1,065
-  bottom of 3-1/2" 13.3# DP              10,600     1,292
-  bottom of 3-1/2" HWDP                  11,200     1,314
-  bottom of 4-3/4" DC                    11,500     1,326
+Drill string, top down (kill mud)            MD ft    TVD ft   Strokes
+  KOP                                         3,000     3,000       456
+  end of build                                4,000     3,955       609
+  bottom of 5" 19.5# DP                      11,212    10,201     1,706
+  bottom of 5" HWDP                          12,112    10,980     1,773
+  bit                                        12,712    11,500     1,812
 
-Annulus crossovers (bit up)            Depth ft   Strokes
-  top of DC x 6-1/8" hole                11,200        38
-  top of HWDP x 6-1/8" hole              10,600       163
-  top of 3-1/2" DP x 6-1/8" hole          9,500       394
-  top of 3-1/2" DP x 7" casing            7,000       958
-  top of 5" DP x 7" casing                    0     1,796
+Annulus, bit up                              MD ft    TVD ft   Strokes
+  top of DC x 8-1/2" hole                    12,112    10,980       150
+  top of HWDP x 8-1/2" hole                  11,212    10,201       503
+  shoe / top of DP x 8-1/2" hole              5,380     5,150     2,791
+  end of build                                4,000     3,955     3,368
+  KOP                                         3,000     3,000     3,785
+  surface                                         0         0     5,039
 ```
 
 ## Roadmap
 
-Each step adds one complication to the simplest kill, with hand-worked tests.
+Each step adds one complication, with hand-worked tests checked before any code is
+committed. Every method is covered for every well and string type, first on a
+surface BOP stack, then the web page, then the subsea stack.
 
-- [x] **v0.1:** vertical well, untapered string, surface stack, Driller's method
-  (plus a straight-line Wait and Weight schedule)
-- [x] **v0.1.1:** Driller's method start-up/shut-down procedure and shut-in checks
-- [x] **v0.2:** tapered string, vertical well, Driller's method: strokes to every
-  drill string and annulus crossover
-- [ ] Deviated and horizontal wells: MD and TVD at key points
-- [ ] Volumetric method and bullheading
-- [ ] Subsea BOP stack: choke line friction, riser margin, choke line strokes
-- [ ] Web page interface, with a kill plot of forecast drill pipe and annulus
-  pressure beside the table, showing the inflection at each pipe change
+**Well and string types, for each method:** vertical untapered, vertical tapered,
+deviated/horizontal untapered, deviated/horizontal tapered.
+
+### Surface BOP stack
+
+**Driller's method**
+- [x] Vertical, untapered string (**v0.1**, start-up/shut-down and shut-in checks **v0.1.1**)
+- [x] Vertical, tapered string (**v0.2**)
+- [x] Deviated and horizontal, untapered string (**v0.3**)
+- [ ] Deviated and horizontal, tapered string
+
+**Wait and Weight**
+- [ ] Vertical, untapered string (a straight-line schedule is already included)
+- [ ] Vertical, tapered string
+- [ ] Deviated and horizontal, untapered string
+- [ ] Deviated and horizontal, tapered string
+
+**Volumetric method and lubricate and bleed**
+- [ ] Vertical, untapered string
+- [ ] Vertical, tapered string
+- [ ] Deviated and horizontal, untapered string
+- [ ] Deviated and horizontal, tapered string
+
+**Bullheading**
+- [ ] Vertical, untapered string
+- [ ] Vertical, tapered string
+- [ ] Deviated and horizontal, untapered string
+- [ ] Deviated and horizontal, tapered string
+
+**Reverse circulation**
+- [ ] Vertical, untapered string
+- [ ] Vertical, tapered string
+- [ ] Deviated and horizontal, untapered string
+- [ ] Deviated and horizontal, tapered string
+
+### Web page (after the surface stack is complete)
+
+- [ ] Web page, with a kill plot of forecast drill pipe and annulus pressure beside
+  the table, showing the inflection at each pipe change
+
+### Subsea BOP stack
+
+All of the above again, adding choke line friction, riser margin and choke line
+volumes and strokes:
+
+- [ ] Driller's method: all four well and string types
+- [ ] Wait and Weight: all four well and string types
+- [ ] Volumetric method and lubricate and bleed: all four well and string types
+- [ ] Bullheading: all four well and string types
+- [ ] Reverse circulation: all four well and string types
 
 ## Project layout
 
@@ -209,21 +273,24 @@ Each step adds one complication to the simplest kill, with hand-worked tests.
 src/killsheet/
   rounding.py    the three rounding rules (the only place rounding is done)
   formulas.py    KMW, ICP, FCP, MAMW, MAASP
-  strokes.py     volumes and strokes
+  depths.py      MD and TVD: TVD at any MD from the key points
+  strokes.py     volumes, strokes, crossovers and section length checks
   drillers.py    Driller's method kill steps
   schedule.py    Wait and Weight drill pipe pressure schedule
-tests/           one test file per module, plus a full tapered-well kill sheet;
-                 all hand-worked examples
+tests/           one test file per module, plus a full kill sheet for each example
+                 well; all hand-worked examples
 examples/
-  example_well.py        baseline well: untapered string
-  tapered_well.py        tapered string
+  example_well.py        baseline: vertical, untapered string
+  tapered_well.py        vertical, tapered string
+  deviated_well.py       deviated, untapered string
+  horizontal_well.py     horizontal, untapered string
   kill_sheet_printer.py  prints a kill sheet (shared by both examples)
 .github/workflows/tests.yml   runs the tests on every push
 ```
 
 ## Testing
 
-The tests and both example kill sheets run automatically on GitHub on every push,
+The tests and every example kill sheet run automatically on GitHub on every push,
 on Python 3.10–3.13. The badge at the top of this page shows whether they're passing.
 
 ## Disclaimer

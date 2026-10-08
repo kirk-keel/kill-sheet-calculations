@@ -4,14 +4,19 @@ Baseline example well: vertical, untapered string (one drill pipe size + BHA),
 TVD 11,500 ft, shoe 5,150 ft. The expected answers were worked by hand.
 """
 
+import pytest
+
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
+    check_section_lengths,
     crossover_strokes,
     section_volume,
     strokes_for_volume,
+    strokes_to_length,
     surface_to_bit_strokes,
     total_volume,
+    volume_to_length,
 )
 
 # ---------------------------------------------------------------------------
@@ -101,3 +106,41 @@ def test_annulus_crossover_strokes():
     # 281.4 / 0.117 = 2,405.1 -> 2,405   (shoe = bit to shoe)
     # 533.2 / 0.117 = 4,557.3 -> 4,557   (surface = bit to surface)
     assert crossover_strokes(FULL_ANNULUS, PUMP_OUTPUT_BBL_PER_STK) == [150, 503, 2405, 4557]
+
+
+def test_volume_to_a_point_partway_through_a_section():
+    # 3,000 ft into the drill pipe: 0.0178 x 3,000 = 53.4
+    assert volume_to_length(DRILL_STRING, 3_000) == 53.4
+    # 10,500 ft: all the DP (178.0) + 500 ft of HWDP (0.0087 x 500 = 4.35 -> 4.4) = 182.4
+    assert volume_to_length(DRILL_STRING, 10_500) == 182.4
+
+
+def test_volume_to_the_full_length_matches_total_volume():
+    assert volume_to_length(DRILL_STRING, 11_500) == total_volume(DRILL_STRING)
+
+
+def test_strokes_to_length_matches_crossovers():
+    strokes = [strokes_to_length(DRILL_STRING, md, PUMP_OUTPUT_BBL_PER_STK) for md in (10_000, 10_900, 11_500)]
+    assert strokes == crossover_strokes(DRILL_STRING, PUMP_OUTPUT_BBL_PER_STK) == [1521, 1588, 1627]
+
+
+def test_length_beyond_the_sections_is_rejected():
+    with pytest.raises(ValueError, match="longer than the sections"):
+        volume_to_length(DRILL_STRING, 12_000)
+
+
+def test_section_lengths_that_add_up_pass():
+    check_section_lengths(DRILL_STRING, OPEN_HOLE_ANNULUS, [DP_IN_CASING], 11_500, 5_150)
+
+
+@pytest.mark.parametrize(
+    "drill_string, open_hole, cased_hole, message",
+    [
+        ([(0.0178, 10_100), HWDP, DRILL_COLLARS], OPEN_HOLE_ANNULUS, [DP_IN_CASING], "Drill string"),
+        (DRILL_STRING, [DC_IN_OPEN_HOLE, HWDP_IN_OPEN_HOLE], [DP_IN_CASING], "Open hole annulus"),
+        (DRILL_STRING, OPEN_HOLE_ANNULUS, [(0.0489, 5_000)], "Cased hole annulus"),
+    ],
+)
+def test_section_lengths_that_dont_add_up_are_rejected(drill_string, open_hole, cased_hole, message):
+    with pytest.raises(ValueError, match=message):
+        check_section_lengths(drill_string, open_hole, cased_hole, 11_500, 5_150)

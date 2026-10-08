@@ -14,7 +14,7 @@ print_kill_sheet(
     method=DRILLERS,                    # or WAIT_AND_WEIGHT
     step_method=EVERY_100_STROKES,      # Wait and Weight only: or TEN_STEPS
     # Well data
-    tvd_ft=11_500,
+    bit_tvd_ft=11_500,
     shoe_tvd_ft=5_150,
     original_mud_weight_ppg=10.4,
     # Leak-off test

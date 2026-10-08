@@ -12,7 +12,7 @@ print_kill_sheet(
     title="KILL SHEET - vertical well, tapered string, surface BOP stack",
     method=DRILLERS,
     # Well data
-    tvd_ft=11_500,
+    bit_tvd_ft=11_500,
     shoe_tvd_ft=9_500,
     original_mud_weight_ppg=10.4,
     # Leak-off test

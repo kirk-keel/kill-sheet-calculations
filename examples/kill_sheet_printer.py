@@ -1,9 +1,11 @@
 """Prints a kill sheet. Shared by the example wells in this folder.
 
-Sections here are (name, capacity bbl/ft, length ft) - the name is only for
+Sections here are (name, capacity bbl/ft, length ft MD) - the name is only for
 printing. The calculator itself works with (capacity bbl/ft, length ft).
+Key points are (name, MD ft, TVD ft).
 """
 
+from killsheet.depths import tvd_at_md
 from killsheet.drillers import drillers_method
 from killsheet.formulas import (
     final_circulating_pressure,
@@ -16,7 +18,8 @@ from killsheet.schedule import EVERY_100_STROKES, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
-    crossover_strokes,
+    check_section_lengths,
+    strokes_to_length,
     surface_to_bit_strokes,
 )
 
@@ -29,9 +32,17 @@ def without_names(sections):
     return [(capacity, length) for _name, capacity, length in sections]
 
 
+def depth_rows(rows, survey):
+    """Group (name, MD) rows by MD - names at the same MD are joined - and add TVD."""
+    by_md = {}
+    for name, md_ft in rows:
+        by_md.setdefault(md_ft, []).append(name)
+    return [(" / ".join(names), md_ft, tvd_at_md(md_ft, survey)) for md_ft, names in by_md.items()]
+
+
 def print_kill_sheet(
     title,
-    tvd_ft,
+    bit_tvd_ft,
     shoe_tvd_ft,
     original_mud_weight_ppg,
     lot_pressure_psi,
@@ -43,17 +54,31 @@ def print_kill_sheet(
     drill_string,
     open_hole_annulus,
     cased_hole_annulus,
+    bit_md_ft=None,
+    shoe_md_ft=None,
+    key_points=(),
     surface_line_volume_bbl=0,
     method=DRILLERS,
     step_method=EVERY_100_STROKES,
 ):
-    """Calculate and print the whole kill sheet for a vertical well."""
+    """Calculate and print the whole kill sheet.
+
+    Vertical well: leave out bit_md_ft, shoe_md_ft and key_points (MD = TVD).
+    Deviated or horizontal well: give the bit and shoe MD, and key points
+    such as KOP, end of build and the heel as (name, MD, TVD).
+    """
+    bit_md_ft = bit_tvd_ft if bit_md_ft is None else bit_md_ft
+    shoe_md_ft = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
+    survey = [(md, tvd) for _name, md, tvd in key_points]
+    survey += [(shoe_md_ft, shoe_tvd_ft), (bit_md_ft, bit_tvd_ft)]
+
     string = without_names(drill_string)
     open_hole = without_names(open_hole_annulus)
     annulus = without_names(open_hole_annulus + cased_hole_annulus)
     pump = pump_output_bbl_per_stk
+    check_section_lengths(string, open_hole, without_names(cased_hole_annulus), bit_md_ft, shoe_md_ft)
 
-    kmw = kill_mud_weight(sidpp_psi, tvd_ft, original_mud_weight_ppg)
+    kmw = kill_mud_weight(sidpp_psi, bit_tvd_ft, original_mud_weight_ppg)
     icp = initial_circulating_pressure(sidpp_psi, scr_pressure_psi)
     fcp = final_circulating_pressure(scr_pressure_psi, kmw, original_mud_weight_ppg)
     mamw = max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg)
@@ -76,22 +101,31 @@ def print_kill_sheet(
     print(f"Bit to surface               {btsurf:>8,} stks")
     print()
 
-    # Kill mud position: strokes to the bottom of each drill string section.
-    print("Drill string crossovers (top down)     Depth ft   Strokes")
-    depth_ft = 0
-    strokes = crossover_strokes(string, pump, surface_line_volume_bbl)
-    for (name, _capacity, length), stks in zip(drill_string, strokes):
-        depth_ft += length
-        print(f"  bottom of {name:<26}{depth_ft:>9,}  {stks:>8,}")
+    # Drill string, top down: key points and the bottom of each section.
+    rows = [(name, md) for name, md, _tvd in key_points]
+    md_ft = 0
+    for name, _capacity, length in drill_string:
+        md_ft += length
+        rows.append((f"bottom of {name}", md_ft))
+    rows[-1] = ("bit", bit_md_ft)
+    print("Drill string, top down (kill mud)            MD ft    TVD ft   Strokes")
+    for name, md_ft, tvd_ft in sorted(depth_rows(rows, survey), key=lambda row: row[1]):
+        stks = strokes_to_length(string, md_ft, pump, surface_line_volume_bbl)
+        print(f"  {name:<40}{md_ft:>9,} {tvd_ft:>9,} {stks:>9,}")
     print()
 
-    # Annulus: strokes from the bit to the top of each annulus section.
-    print("Annulus crossovers (bit up)            Depth ft   Strokes")
-    depth_ft = tvd_ft
-    strokes = crossover_strokes(annulus, pump)
-    for (name, _capacity, length), stks in zip(open_hole_annulus + cased_hole_annulus, strokes):
-        depth_ft -= length
-        print(f"  top of {name:<29}{depth_ft:>9,}  {stks:>8,}")
+    # Annulus, bit up: key points, the shoe and the top of each section.
+    rows = [(name, md) for name, md, _tvd in key_points if md < bit_md_ft]
+    rows.append(("shoe", shoe_md_ft))
+    md_ft = bit_md_ft
+    for name, _capacity, length in open_hole_annulus + cased_hole_annulus:
+        md_ft -= length
+        rows.append((f"top of {name}", md_ft))
+    rows[-1] = ("surface", 0)
+    print("Annulus, bit up                              MD ft    TVD ft   Strokes")
+    for name, md_ft, tvd_ft in sorted(depth_rows(rows, survey), key=lambda row: -row[1]):
+        stks = strokes_to_length(annulus, bit_md_ft - md_ft, pump)
+        print(f"  {name:<40}{md_ft:>9,} {tvd_ft:>9,} {stks:>9,}")
     print()
 
     if method == DRILLERS:
