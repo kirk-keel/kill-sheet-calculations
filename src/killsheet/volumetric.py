@@ -74,6 +74,27 @@ def volume_to_bleed_per_cycle(working_pressure_psi, mud_gradient_psi_per_ft, ann
     return round_down_to_tenth(working_pressure_psi / mud_gradient_psi_per_ft * annular_capacity_bbl_per_ft)
 
 
+def angle_corrected_volume_to_bleed(working_pressure_psi, mud_gradient_psi_per_ft, annular_capacity_bbl_per_ft,
+                                    section_md_ft, section_tvd_ft):
+    """Volume to bleed per cycle allowing for hole angle (bbl), rounded DOWN - FOR INFORMATION.
+
+        Volume = Working pressure / (Mud gradient x TVD / MD of the section) x Annular capacity
+
+    In a deviated section a barrel fills a length of hole along the MD but only
+    adds hydrostatic for its TVD, so each barrel is worth less psi and this
+    volume is LARGER than IADC #35. The volume actually bled is the vertical
+    (IADC #35) one - it bleeds the least mud (user rule). Returns None for a
+    horizontal section (no TVD): gas there doesn't migrate the way it does
+    vertically, and the volumetric method applies once it reaches the build
+    or vertical section.
+    """
+    if section_tvd_ft == 0:
+        return None
+    angle_factor = section_tvd_ft / section_md_ft
+    return round_down_to_tenth(working_pressure_psi / (mud_gradient_psi_per_ft * angle_factor)
+                               * annular_capacity_bbl_per_ft)
+
+
 def gas_at_surface(sicp_rise_in_15_minutes_psi):
     """True if SICP rose no more than 10 psi over a 15 minute wait - the gas is at surface."""
     return sicp_rise_in_15_minutes_psi <= GAUGE_TOLERANCE_PSI

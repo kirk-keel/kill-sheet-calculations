@@ -21,11 +21,15 @@ hydrostatic = gradient x height (#13, #14).
 
 Rounding: the hydrostatic added is how much pressure gets bled off - bleeding
 MORE loses bottomhole pressure - so it is rounded DOWN to a whole psi (rule 2).
+
+Deviated and horizontal wells: the psi per bbl assumes the lubricated mud sits
+in the vertical part of the well. If the kill mud column passes KOP, the sheet
+WARNS - each bbl is then worth less psi than calculated.
 """
 
 from typing import NamedTuple
 
-from killsheet.rounding import round_down_to_whole_number
+from killsheet.rounding import round_down_to_whole_number, round_to_whole_number
 
 
 class LubricateCycle(NamedTuple):
@@ -68,3 +72,30 @@ def lubricate_and_bleed_table(sicp_gas_at_surface_psi, working_pressure_psi, bbl
         if casing_psi == 0:
             break
     return rows
+
+
+def kill_mud_column_ft(total_bbl_lubricated, surface_annular_capacity_bbl_per_ft):
+    """Length (ft MD) of kill mud lubricated into the annulus at surface, whole feet.
+
+        Column = Total bbl lubricated / Annular capacity at surface
+    """
+    return round_to_whole_number(total_bbl_lubricated / surface_annular_capacity_bbl_per_ft)
+
+
+def cycles_past_kop(rows, surface_annular_capacity_bbl_per_ft, kop_md_ft):
+    """Cycle numbers where the kill mud column has gone below KOP - WARN.
+
+    The psi bled per bbl assumes the lubricated mud sits in the vertical part
+    of the well. Once the column passes KOP, each bbl adds less hydrostatic
+    (its TVD is less than its length), so the bleed is overstated.
+    Returns [] for a vertical well (kop_md_ft is None).
+    """
+    if kop_md_ft is None:
+        return []
+    past = []
+    total_bbl = 0
+    for row in rows:
+        total_bbl += row.bbl_pumped
+        if kill_mud_column_ft(total_bbl, surface_annular_capacity_bbl_per_ft) > kop_md_ft:
+            past.append(row.cycle)
+    return past

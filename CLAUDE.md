@@ -131,6 +131,16 @@ DEPTH of the kill mud, never a straight line against strokes:
   bleed back to the pre-pump pressure minus bbl x KWM gradient / surface capacity
   (rounded DOWN). Repeat until casing = 0 (hydrostatic control regained).
 - No dedicated IADC lubricate and bleed formula — built from #12, #13, #14. Say so.
+- Deviated/horizontal (user rules, v0.11): volume bled stays the VERTICAL IADC #35
+  volume (bleeds the least); the angle-corrected volume
+  `Pw / (gradient x TVD/MD of the section) x capacity` is printed for information only.
+  Horizontal sections: no angle-corrected volume, plus a NOTE that gas in the lateral
+  doesn't migrate like it does vertically — the method applies once gas is in the build
+  or vertical section. The SMALLEST annulus is kept as is even if it is in the lateral.
+- Lubricate and bleed: WARN when the kill mud column (total bbl / surface capacity)
+  passes KOP (deepest key point with TVD = MD) — each bbl is then worth less psi.
+- Example sheets: one per well type for pipe on bottom is fine; every situation must be
+  covered in the tests.
 
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
@@ -210,8 +220,8 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
-- Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10 (all three
-                         situations each), (c) next
+- Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11
+                         (all three situations each), (d) next
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)
 

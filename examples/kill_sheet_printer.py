@@ -22,9 +22,10 @@ from killsheet.strokes import (
     strokes_to_length,
     surface_to_bit_strokes,
 )
-from killsheet.lubricate_and_bleed import lubricate_and_bleed_table
+from killsheet.lubricate_and_bleed import cycles_past_kop, kill_mud_column_ft, lubricate_and_bleed_table
 from killsheet.volumetric import (
     SMALLEST,
+    angle_corrected_volume_to_bleed,
     annular_capacity_choices,
     mud_gradient,
     volume_to_bleed_per_cycle,
@@ -216,12 +217,21 @@ def print_volumetric_sheet(
     sicp_gas_at_surface_psi,
     bbl_pumped_each_cycle,
     capacity_choice=SMALLEST,
+    td_md_ft=None,
+    td_tvd_ft=None,
+    shoe_md_ft=None,
+    key_points=(),
 ):
     """Volumetric method, then lubricate and bleed, for any situation.
 
-    annulus_bottom_up: (name, capacity bbl/ft, length ft) from the BOTTOM UP,
+    annulus_bottom_up: (name, capacity bbl/ft, length ft MD) from the BOTTOM UP,
     including sections with no pipe in them. The top section is the annulus
     at surface, used for lubricate and bleed.
+
+    Vertical well: leave out td_md_ft, td_tvd_ft, shoe_md_ft and key_points.
+    Deviated or horizontal well: give the TD and shoe MD/TVD and the key points
+    as (name, MD, TVD). The bleed used stays the vertical (IADC #35) volume; the
+    angle-corrected volume for each section is printed for information.
     """
     annulus = without_names(annulus_bottom_up)
     gradient = mud_gradient(original_mud_weight_ppg)
@@ -238,9 +248,33 @@ def print_volumetric_sheet(
     print(f"MAASP                        {maasp_psi:>8,} psi")
     print(f"Safety margin / working      {safety_margin_psi:>4,} / {working_pressure_psi:,} psi  (team's choice)")
     print()
-    print("Annulus, bottom up                      Capacity  Length ft")
-    for name, capacity, length in annulus_bottom_up:
-        print(f"  {name:<36}{capacity:>9.4f}  {length:>9,}")
+    td_md = td_md_ft if td_md_ft is not None else sum(length for _name, _cap, length in annulus_bottom_up)
+    td_tvd = td_tvd_ft if td_tvd_ft is not None else td_md
+    shoe_md = shoe_md_ft if shoe_md_ft is not None else shoe_tvd_ft
+    vertical = td_md == td_tvd and not key_points
+    if vertical:
+        print("Annulus, bottom up                      Capacity  Length ft")
+        for name, capacity, length in annulus_bottom_up:
+            print(f"  {name:<36}{capacity:>9.4f}  {length:>9,}")
+    else:
+        survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (td_md, td_tvd)]
+        print("Annulus, bottom up              Capacity   MD ft  TVD ft  TVD/MD  Bleed bbl (angle corrected)")
+        bottom_md = td_md
+        horizontal = False
+        for name, capacity, length in annulus_bottom_up:
+            top_md = bottom_md - length
+            section_tvd = tvd_at_md(bottom_md, survey) - tvd_at_md(top_md, survey)
+            corrected = angle_corrected_volume_to_bleed(working_pressure_psi, gradient, capacity, length, section_tvd)
+            shown = "n/a - horizontal" if corrected is None else f"{corrected:.1f}"
+            horizontal = horizontal or corrected is None
+            print(f"  {name:<28}{capacity:>9.4f} {length:>7,} {section_tvd:>7,}  {section_tvd / length:>6.3f}  {shown}")
+            bottom_md = top_md
+        print("  Angle-corrected volumes are for information only - the volume bled is the")
+        print("  vertical IADC #35 volume below, which bleeds the least mud.")
+        if horizontal:
+            print("  NOTE: gas in the horizontal section doesn't migrate the way it does vertically -")
+            print("  it can sit in high spots. The volumetric method applies once the gas is in the")
+            print("  build or vertical section.")
     print()
     print(f"Volume to bleed per {working_pressure_psi} psi = (working pressure / mud gradient) x annular capacity")
     for choice, capacity in choices.items():
@@ -262,11 +296,21 @@ def print_volumetric_sheet(
     print()
 
     surface_capacity = annulus[-1][0]
+    # KOP: the deepest key point that is still vertical (TVD = MD).
+    vertical_points = [md for _name, md, tvd in key_points if md == tvd]
+    kop_md = max(vertical_points) if vertical_points else None
     print(f"Lubricate and bleed - kill mud, annulus at surface {surface_capacity:.4f} bbl/ft")
     print(f"  hydrostatic added = bbl pumped x {kill_gradient:.4f} / {surface_capacity:.4f}")
     print("  Cycle  Pump to psi  bbl pumped  Hydrostatic psi  Bleed to psi")
-    for row in lubricate_and_bleed_table(sicp_gas_at_surface_psi, working_pressure_psi, bbl_pumped_each_cycle,
-                                         kill_gradient, surface_capacity):
+    lube = lubricate_and_bleed_table(sicp_gas_at_surface_psi, working_pressure_psi, bbl_pumped_each_cycle,
+                                     kill_gradient, surface_capacity)
+    past_kop = cycles_past_kop(lube, surface_capacity, kop_md)
+    for row in lube:
         done = "  hydrostatic control regained" if row.bleed_to_psi == 0 else ""
+        warning = "  ! kill mud below KOP - less psi per bbl" if row.cycle in past_kop else ""
         print(f"  {row.cycle:>5}  {row.pump_to_psi:>11,}  {row.bbl_pumped:>10.1f}  {row.hydrostatic_added_psi:>15,}"
-              f"  {row.bleed_to_psi:>12,}{done}")
+              f"  {row.bleed_to_psi:>12,}{warning}{done}")
+    if kop_md is not None:
+        column = kill_mud_column_ft(sum(row.bbl_pumped for row in lube), surface_capacity)
+        print(f"  kill mud column {column:,} ft vs KOP {kop_md:,} ft"
+              + (" - PASSED KOP" if past_kop else " - stays above KOP"))
