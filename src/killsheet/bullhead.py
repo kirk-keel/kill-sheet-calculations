@@ -143,9 +143,13 @@ def bullhead_chart(original_mud_weight_ppg, kill_fluid_ppg, mamw_ppg, shoe_tvd_f
             return bottom_md_ft
         return md_after_strokes(strokes, sections, pump)
 
-    def add(strokes, label):
-        string_md = kill_fluid_md(strokes, string_strokes, drill_string_sections, bit_md_ft)
-        annulus_md = kill_fluid_md(strokes, annulus_strokes, annulus_top_down, bit_md_ft)
+    def add(strokes, label, string_md=None, annulus_md=None):
+        # A named point (crossover, KOP, shoe ...) is shown at its EXACT depth on
+        # the side it belongs to; the other side is worked out from the strokes.
+        if string_md is None:
+            string_md = kill_fluid_md(strokes, string_strokes, drill_string_sections, bit_md_ft)
+        if annulus_md is None:
+            annulus_md = kill_fluid_md(strokes, annulus_strokes, annulus_top_down, bit_md_ft)
         string_max, annulus_max = bullhead_limits(string_md, annulus_md, original_mud_weight_ppg, kill_fluid_ppg,
                                                   mamw_ppg, shoe_md_ft, shoe_tvd_ft, bit_md_ft, survey)
         if strokes in rows and rows[strokes].label != STEP:
@@ -159,9 +163,16 @@ def bullhead_chart(original_mud_weight_ppg, kill_fluid_ppg, mamw_ppg, shoe_tvd_f
     md_ft = 0
     for _capacity, length_ft in drill_string_sections[:-1]:
         md_ft += length_ft
-        add(strokes_to_length(drill_string_sections, md_ft, pump), STRING_CROSSOVER)
+        add(strokes_to_length(drill_string_sections, md_ft, pump), STRING_CROSSOVER, string_md=md_ft)
+    # Key points (KOP, end of build, heel ...): the limits bend when kill fluid
+    # passes one on either side, so each gets its own row on each side.
+    for name, key_md_ft, _tvd in key_points:
+        if key_md_ft < bit_md_ft:
+            add(strokes_to_length(drill_string_sections, key_md_ft, pump), f"{name} (string)",
+                string_md=key_md_ft)
+            add(strokes_to_length(annulus_top_down, key_md_ft, pump), f"{name} (annulus)", annulus_md=key_md_ft)
     add(string_strokes, STRING_AT_BIT)
-    add(strokes_to_length(annulus_top_down, shoe_md_ft, pump), ANNULUS_AT_SHOE)
+    add(strokes_to_length(annulus_top_down, shoe_md_ft, pump), ANNULUS_AT_SHOE, annulus_md=shoe_md_ft)
     add(annulus_strokes, ANNULUS_AT_BOTTOM)
     if overdisplace_strokes:
         add(annulus_strokes + overdisplace_strokes, OVERDISPLACED)

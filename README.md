@@ -17,8 +17,9 @@ horizontal wells, and **version 0.8** completes Wait and Weight on a surface sta
 every well and string type. **Version 0.9** adds the volumetric method and lubricate and
 bleed, **version 0.10** extends them to tapered strings, **version 0.11** to deviated
 and horizontal wells, and **version 0.12** completes them on a surface stack for every
-well and string type. **Version 0.13** adds bullheading while drilling, and
-**version 0.14** extends it to tapered strings. See the [roadmap](#roadmap).
+well and string type. **Version 0.13** adds bullheading while drilling, **version
+0.14** extends it to tapered strings, and **version 0.15** to deviated and horizontal
+wells. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -78,6 +79,8 @@ python examples/volumetric_deviated_tapered_well.py     # deviated, tapered stri
 python examples/volumetric_horizontal_tapered_well.py   # horizontal, tapered string
 python examples/bullhead_well.py                # bullhead, vertical, untapered string
 python examples/bullhead_tapered_well.py        # bullhead, vertical, tapered string
+python examples/bullhead_deviated_well.py       # bullhead, deviated, untapered string
+python examples/bullhead_horizontal_well.py     # bullhead, horizontal, untapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -250,6 +253,12 @@ breaking down the formation**.
 - On the tapered example (MAASP 889) the tight 5" DP x 7" casing annulus moves kill fluid
   down faster than the string at first, so the annulus limit falls first; the string
   limit then falls to **231 psi** once it reaches the bit through the 3-1/2" pipe.
+- **Deviated and horizontal wells:** every column uses TVD, and the chart adds a row when
+  kill fluid passes each key point (KOP, end of build, heel) on each side, showing MD and
+  TVD. On the horizontal example (shoe at the heel) the string limit drops to its final
+  **99 psi** as soon as kill fluid reaches the heel: the flat lateral adds no hydrostatic,
+  and with no open hole below the shoe nothing pushes back on it from below.
+- Named points (crossovers, key points, the shoe) are shown at their exact depth.
 
 ### Rounding: three rules
 
@@ -518,7 +527,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 **Bullheading**
 - [x] Vertical, untapered string (**v0.13**; kill fluid reaches the bit when strokes round down **v0.13.1**)
 - [x] Vertical, tapered string (**v0.14**)
-- [ ] Deviated and horizontal, untapered string
+- [x] Deviated and horizontal, untapered string (**v0.15**)
 - [ ] Deviated and horizontal, tapered string
 
 **Reverse circulation**
@@ -579,6 +588,8 @@ examples/
   volumetric_horizontal_tapered_well.py  horizontal, tapered string
   bullhead_well.py                       bullhead, vertical, untapered string
   bullhead_tapered_well.py               bullhead, vertical, tapered string
+  bullhead_deviated_well.py              bullhead, deviated, untapered string
+  bullhead_horizontal_well.py            bullhead, horizontal, untapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

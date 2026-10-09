@@ -161,6 +161,9 @@ DEPTH of the kill mud, never a straight line against strokes:
   for the actual string and annulus pressures (as on the IADC worksheet).
 - Minimum rate to beat gas migration: IADC #34 then #13 with the LARGEST annulus,
   rounded UP (a minimum — the mirror of rule 2).
+- Deviated/horizontal (v0.15): every column by TVD; a row when kill fluid passes each key
+  point on EACH side ("KOP (string)", "KOP (annulus)" ...); chart shows MD and TVD.
+  Named points (crossovers, key points, shoe) are shown at their EXACT depth on their side.
 - Once the strokes reach a side's surface-to-bottom strokes, that side's kill fluid is AT
   the bottom by definition (v0.13.1 fix: working depth back from rounded strokes stopped
   20 ft short of the bit on the tapered well — 1,326 x 0.117 = 155.1 of 155.2 bbl).
@@ -245,7 +248,7 @@ Surface stack:
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
-- Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) next
+- Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) next
 - Reverse circulation:   (a)-(d)
 
 Web page (user: AFTER the surface stack is complete, BEFORE subsea):

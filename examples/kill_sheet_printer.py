@@ -339,12 +339,19 @@ def print_bullhead_sheet(
     drill_string,
     annulus_bottom_up,
     overdisplacement_bbl=0,
+    bit_md_ft=None,
+    shoe_md_ft=None,
+    key_points=(),
 ):
     """Bullhead sheet (drilling): annular shut, the same rate down the string and the backside.
 
     drill_string: (name, capacity, length) top down. annulus_bottom_up: (name,
     capacity, length) from the bottom up. equipment_ratings: (name, psi) - the
     lowest rating or tested value is the equipment limit.
+
+    Vertical well: leave out bit_md_ft, shoe_md_ft and key_points (MD = TVD).
+    Deviated or horizontal well: give the bit and shoe MD and the key points as
+    (name, MD, TVD); the chart then shows MD and TVD for the kill fluid on each side.
     """
     string = without_names(drill_string)
     annulus = without_names(annulus_bottom_up)
@@ -386,10 +393,25 @@ def print_bullhead_sheet(
     print("away. The goal is injectivity, NOT breaking down the formation - stay below the")
     print("max on both sides. Max = lower of the formation limit and the equipment limit.")
     print()
-    print("  Strokes  Kill fluid MD ft    String max  Annulus max   Actual string  Actual annulus")
-    print("    (each)   string  annulus         psi          psi             psi             psi")
-    for row in bullhead_chart(original_mud_weight_ppg, kill_fluid, mamw, shoe_tvd_ft, string, annulus, pump,
-                              limit_psi, overdisplacement_bbl):
+    bit_md = bit_tvd_ft if bit_md_ft is None else bit_md_ft
+    shoe_md = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
+    vertical = bit_md == bit_tvd_ft and not key_points
+    survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (bit_md, bit_tvd_ft)]
+    chart = bullhead_chart(original_mud_weight_ppg, kill_fluid, mamw, shoe_tvd_ft, string, annulus, pump,
+                           limit_psi, overdisplacement_bbl, shoe_md_ft=shoe_md, bit_tvd_ft=bit_tvd_ft,
+                           key_points=key_points)
+    if vertical:
+        print("  Strokes  Kill fluid MD ft    String max  Annulus max   Actual string  Actual annulus")
+        print("    (each)   string  annulus         psi          psi             psi             psi")
+    else:
+        print("  Strokes  Kill fluid, string  Kill fluid, annulus  String  Annulus   Actual   Actual")
+        print("    (each)     MD ft   TVD ft      MD ft   TVD ft  max psi  max psi   string  annulus")
+    for row in chart:
         label = "" if row.label == "step" else f"  <- {row.label}"
-        print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>7,}  {row.annulus_kill_md_ft:>7,}"
-              f"  {row.string_max_psi:>10,}  {row.annulus_max_psi:>11,}   ____________    ____________{label}")
+        if vertical:
+            print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>7,}  {row.annulus_kill_md_ft:>7,}"
+                  f"  {row.string_max_psi:>10,}  {row.annulus_max_psi:>11,}   ____________    ____________{label}")
+        else:
+            print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>8,} {tvd_at_md(row.string_kill_md_ft, survey):>8,}"
+                  f"   {row.annulus_kill_md_ft:>8,} {tvd_at_md(row.annulus_kill_md_ft, survey):>8,}"
+                  f"  {row.string_max_psi:>7,}  {row.annulus_max_psi:>7,}   ______   ______{label}")
