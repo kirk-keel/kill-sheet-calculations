@@ -512,7 +512,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, tapered string: all three situations (**v0.12**)
 
 **Bullheading**
-- [x] Vertical, untapered string (**v0.13**)
+- [x] Vertical, untapered string (**v0.13**; kill fluid reaches the bit when strokes round down **v0.13.1**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string

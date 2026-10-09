@@ -161,6 +161,9 @@ DEPTH of the kill mud, never a straight line against strokes:
   for the actual string and annulus pressures (as on the IADC worksheet).
 - Minimum rate to beat gas migration: IADC #34 then #13 with the LARGEST annulus,
   rounded UP (a minimum — the mirror of rule 2).
+- Once the strokes reach a side's surface-to-bottom strokes, that side's kill fluid is AT
+  the bottom by definition (v0.13.1 fix: working depth back from rounded strokes stopped
+  20 ft short of the bit on the tapered well — 1,326 x 0.117 = 155.1 of 155.2 bbl).
 
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a

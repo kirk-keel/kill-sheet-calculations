@@ -135,9 +135,17 @@ def bullhead_chart(original_mud_weight_ppg, kill_fluid_ppg, mamw_ppg, shoe_tvd_f
 
     rows = {}
 
+    def kill_fluid_md(strokes, side_strokes, sections, bottom_md_ft):
+        # Once the strokes reach this side's surface-to-bottom strokes, kill fluid
+        # is at the bottom by definition. (Working the depth back from rounded
+        # strokes can otherwise stop a few feet short of the bit.)
+        if strokes >= side_strokes:
+            return bottom_md_ft
+        return md_after_strokes(strokes, sections, pump)
+
     def add(strokes, label):
-        string_md = md_after_strokes(min(strokes, string_strokes), drill_string_sections, pump)
-        annulus_md = md_after_strokes(min(strokes, annulus_strokes), annulus_top_down, pump)
+        string_md = kill_fluid_md(strokes, string_strokes, drill_string_sections, bit_md_ft)
+        annulus_md = kill_fluid_md(strokes, annulus_strokes, annulus_top_down, bit_md_ft)
         string_max, annulus_max = bullhead_limits(string_md, annulus_md, original_mud_weight_ppg, kill_fluid_ppg,
                                                   mamw_ppg, shoe_md_ft, shoe_tvd_ft, bit_md_ft, survey)
         if strokes in rows and rows[strokes].label != STEP:

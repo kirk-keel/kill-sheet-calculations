@@ -110,3 +110,16 @@ def test_no_overdisplacement_row_when_none_is_chosen():
 def test_never_above_the_formation_limit_at_the_start(row):
     # Pumping can only take the limits DOWN from MAASP (1,124) on either side.
     assert row[3] <= 1124 and row[4] <= 1124
+
+
+def test_kill_fluid_reaches_the_bit_even_when_strokes_round_down():
+    # Tapered string: 155.2 bbl / 0.117 = 1,326.5 -> 1,326 strokes, and
+    # 1,326 x 0.117 = 155.1 bbl - 0.1 bbl short. Kill fluid must still be AT the
+    # bit (11,500 ft, not 11,480) at the string's kill point, and both sides must
+    # end on the same limit. (Fixed in v0.13.1.)
+    tapered_string = [(0.0178, 7_000), (0.0074, 3_600), (0.0041, 600), (0.0049, 300)]
+    tapered_annulus = [(0.0145, 300), (0.0245, 600), (0.0245, 1_100), (0.0264, 2_500), (0.0140, 7_000)]
+    rows = bullhead_chart(10.4, 11.5, 12.2, 9_500, tapered_string, tapered_annulus, 0.117, 3_000)
+    at_bit = next(row for row in rows if row.label == STRING_AT_BIT)
+    assert (at_bit.strokes, at_bit.string_kill_md_ft) == (1326, 11_500)
+    assert rows[-1].string_max_psi == rows[-1].annulus_max_psi == 345
