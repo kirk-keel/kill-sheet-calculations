@@ -21,8 +21,8 @@ well and string type. **Version 0.13** adds bullheading while drilling, **versio
 0.14** extends it to tapered strings, **version 0.15** to deviated and horizontal
 wells, and **version 0.16** completes bullheading on a surface stack for every well and
 string type. **Version 0.17** adds the reverse circulation kill for completion, workover
-and intervention (CWI) wells, and **version 0.18** extends it to tapered tubing. See the
-[roadmap](#roadmap).
+and intervention (CWI) wells, **version 0.18** extends it to tapered tubing, and **version
+0.19** to deviated and horizontal completions. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -92,6 +92,8 @@ python examples/bullhead_deviated_tapered_well.py     # bullhead, deviated, tape
 python examples/bullhead_horizontal_tapered_well.py   # bullhead, horizontal, tapered string
 python examples/reverse_circulation_well.py     # reverse circulation, CWI well
 python examples/reverse_circulation_tapered_well.py   # reverse circulation, tapered tubing
+python examples/reverse_circulation_deviated_well.py     # reverse circulation, deviated CWI well
+python examples/reverse_circulation_horizontal_well.py   # reverse circulation, horizontal CWI well
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -306,6 +308,14 @@ friction there is, because the choke absorbs it.
 crossover. On the example (3-1/2" over 2-7/8") the pump pressure drops about 84 psi per step
 in the tighter 3-1/2" x 5-1/2" annulus and about 63 below the crossover; the pressures at
 the SSD, FCP and the limits don't change.
+
+**Deviated and horizontal completions:** pressures use TVD and volumes use MD, so the
+step-down follows the TVD of the kill fluid. On a horizontal well with the SSD above KOP and
+the perforations in the lateral, the **heel TVD** is used for the top and mid perf (the
+lateral is flat). Because the SSD is well above the perfs, kill weight is heavier (10.8 ppg
+on the example, against 9.9 on the deviated well) and the volume below the SSD is much
+larger (38.6 bbl against 3.8), so the optional bullhead matters more. The observed ICP has
+to be above the SICP once the SSD is open.
 
 ### Rounding: three rules
 
@@ -580,7 +590,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 **Reverse circulation** (completion, workover, intervention wells)
 - [x] Vertical, untapered string (**v0.17**)
 - [x] Vertical, tapered string (**v0.18**)
-- [ ] Deviated and horizontal, untapered string
+- [x] Deviated and horizontal, untapered string (**v0.19**)
 - [ ] Deviated and horizontal, tapered string
 
 ### Web page (after the surface stack is complete)
@@ -642,6 +652,8 @@ examples/
   bullhead_horizontal_tapered_well.py    bullhead, horizontal, tapered string
   reverse_circulation_well.py            reverse circulation, CWI well
   reverse_circulation_tapered_well.py    reverse circulation, tapered tubing
+  reverse_circulation_deviated_well.py   reverse circulation, deviated CWI well
+  reverse_circulation_horizontal_well.py reverse circulation, horizontal CWI well
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
