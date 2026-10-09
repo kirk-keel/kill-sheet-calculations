@@ -248,8 +248,8 @@ Surface stack:
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
-- Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) next
-- Reverse circulation:   (a)-(d)
+- Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) DONE v0.16
+- Reverse circulation:   (a)-(d), (a) is next
 
 Web page (user: AFTER the surface stack is complete, BEFORE subsea):
 - Including the auto-generated kill plot beside the table: forecast drill pipe AND

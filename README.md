@@ -18,8 +18,9 @@ every well and string type. **Version 0.9** adds the volumetric method and lubri
 bleed, **version 0.10** extends them to tapered strings, **version 0.11** to deviated
 and horizontal wells, and **version 0.12** completes them on a surface stack for every
 well and string type. **Version 0.13** adds bullheading while drilling, **version
-0.14** extends it to tapered strings, and **version 0.15** to deviated and horizontal
-wells. See the [roadmap](#roadmap).
+0.14** extends it to tapered strings, **version 0.15** to deviated and horizontal
+wells, and **version 0.16** completes bullheading on a surface stack for every well and
+string type. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -81,6 +82,8 @@ python examples/bullhead_well.py                # bullhead, vertical, untapered 
 python examples/bullhead_tapered_well.py        # bullhead, vertical, tapered string
 python examples/bullhead_deviated_well.py       # bullhead, deviated, untapered string
 python examples/bullhead_horizontal_well.py     # bullhead, horizontal, untapered string
+python examples/bullhead_deviated_tapered_well.py     # bullhead, deviated, tapered string
+python examples/bullhead_horizontal_tapered_well.py   # bullhead, horizontal, tapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -259,6 +262,9 @@ breaking down the formation**.
   **99 psi** as soon as kill fluid reaches the heel: the flat lateral adds no hydrostatic,
   and with no open hole below the shoe nothing pushes back on it from below.
 - Named points (crossovers, key points, the shoe) are shown at their exact depth.
+- **Tapered strings** change *when* kill fluid reaches each point (the strokes), not the
+  limit at that point: on the deviated example the string still bottoms out at 466 psi,
+  but at 1,603 strokes instead of 1,812.
 
 ### Rounding: three rules
 
@@ -528,7 +534,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Vertical, untapered string (**v0.13**; kill fluid reaches the bit when strokes round down **v0.13.1**)
 - [x] Vertical, tapered string (**v0.14**)
 - [x] Deviated and horizontal, untapered string (**v0.15**)
-- [ ] Deviated and horizontal, tapered string
+- [x] Deviated and horizontal, tapered string (**v0.16**)
 
 **Reverse circulation**
 - [ ] Vertical, untapered string
@@ -590,6 +596,8 @@ examples/
   bullhead_tapered_well.py               bullhead, vertical, tapered string
   bullhead_deviated_well.py              bullhead, deviated, untapered string
   bullhead_horizontal_well.py            bullhead, horizontal, untapered string
+  bullhead_deviated_tapered_well.py      bullhead, deviated, tapered string
+  bullhead_horizontal_tapered_well.py    bullhead, horizontal, tapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
