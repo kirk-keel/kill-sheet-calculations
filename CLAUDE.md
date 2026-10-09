@@ -24,6 +24,7 @@ baseline must keep working and keep its tests.
   - `wait_and_weight.py` — Wait and Weight kill steps, ICP check, recalculation
   - `volumetric.py` — volumetric method: annular capacity choices, IADC #35, cycle table
   - `lubricate_and_bleed.py` — lubricate and bleed cycles
+  - `bullhead.py` — bullheading while drilling: limits for each side, equipment limit, chart
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -142,6 +143,25 @@ DEPTH of the kill mud, never a straight line against strokes:
 - Example sheets: one per well type for pipe on bottom is fine; every situation must be
   covered in the tests.
 
+**Bullheading while drilling** (user-confirmed, v0.13):
+- Kick too large to handle at surface: annular SHUT, kill fluid pumped down the drill
+  string AND the backside at the SAME RATE, at the same time, the whole way (no shutting
+  down a side — different rates on each side would confuse the crew).
+- Goal: establish INJECTIVITY and push the influx back where it came from — NOT break down
+  the formation. Pressure builds until injectivity, then falls.
+- Kill fluid = KMW, rounded UP to the next 0.1 (rule 1). Influx treated as original mud.
+- Formation limit from the LOT / MAMW at the shoe. Equipment limit = LOWEST rating or
+  tested value of the equipment (team list). Each row uses the lower of the two.
+- Annulus max = 0.052 x [MAMW x shoe TVD - fluid above the shoe]; String max =
+  0.052 x [MAMW x shoe TVD - string column to bit + annulus column shoe to bit]. Both
+  rounded DOWN. The string side MUST use both columns (it falls to 466 psi on the baseline
+  well, not 830).
+- Chart: 10 steps of the annulus strokes + rows at string crossovers, kill fluid at the bit,
+  at the shoe (annulus), the kill point, and overdisplacement (team input). Blank columns
+  for the actual string and annulus pressures (as on the IADC worksheet).
+- Minimum rate to beat gas migration: IADC #34 then #13 with the LARGEST annulus,
+  rounded UP (a minimum — the mirror of rule 2).
+
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
 `ValueError` saying so rather than calculating from 0.
@@ -222,7 +242,7 @@ Surface stack:
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
-- Bullheading:           (a)-(d), (a) is next
+- Bullheading:           (a) DONE v0.13, (b) next
 - Reverse circulation:   (a)-(d)
 
 Web page (user: AFTER the surface stack is complete, BEFORE subsea):

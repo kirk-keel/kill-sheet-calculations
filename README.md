@@ -17,7 +17,8 @@ horizontal wells, and **version 0.8** completes Wait and Weight on a surface sta
 every well and string type. **Version 0.9** adds the volumetric method and lubricate and
 bleed, **version 0.10** extends them to tapered strings, **version 0.11** to deviated
 and horizontal wells, and **version 0.12** completes them on a surface stack for every
-well and string type. See the [roadmap](#roadmap).
+well and string type. **Version 0.13** adds bullheading while drilling. See the
+[roadmap](#roadmap).
 
 ## Why I built it
 
@@ -45,6 +46,9 @@ all types of wells using every well control technique at their disposal.
   is at surface. Works with pipe on bottom, pipe above the influx, or pipe out of the hole
 - **Lubricate and bleed:** kill weight mud, annulus at surface; turns the bbl the crew
   pumps into the psi to bleed, until hydrostatic control is regained
+- **Bullheading (drilling):** annular shut, kill fluid down the string and the backside
+  at the same rate; a max-pressure chart for each side (formation limit from the LOT,
+  capped by the lowest equipment rating or test), with columns for the actual pressures
 
 ## How to run it
 
@@ -72,6 +76,7 @@ python examples/volumetric_deviated_well.py     # volumetric + L&B, deviated, pi
 python examples/volumetric_horizontal_well.py   # volumetric + L&B, horizontal, pipe on bottom
 python examples/volumetric_deviated_tapered_well.py     # deviated, tapered string
 python examples/volumetric_horizontal_tapered_well.py   # horizontal, tapered string
+python examples/bullhead_well.py                # bullhead, vertical, untapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -211,6 +216,36 @@ covers every situation. The team killing the well chooses the **safety margin** 
   predict when the gas will reach surface.
 - IADC gives the volumetric formulas (#34, #35). There is no dedicated IADC lubricate and
   bleed formula; it is built from the IADC basics (#12 height of fluid, #13/#14 hydrostatic).
+
+### Bullheading (drilling)
+
+When the kick is too large to handle at surface, the annular is shut and kill fluid is
+pumped down the **drill string and the backside at the same rate, at the same time**, to
+push the influx back where it came from. Pressure builds until **injectivity** is
+established, then falls as the fluid is pushed away. The goal is injectivity, **not
+breaking down the formation**.
+
+| Item | Rule |
+|---|---|
+| Kill fluid | Kill mud weight - rounded **up** to the next 0.1 ppg, even if exact |
+| Formation limit | From the LOT / MAMW at the shoe |
+| Equipment limit | The **lowest** rating or tested value of the equipment |
+| Max on each row | The lower of the two, rounded **down** |
+| Annulus max | `0.052 x [MAMW x shoe TVD - weight of fluid above the shoe x TVD]` |
+| String max | `0.052 x [MAMW x shoe TVD - string fluid x TVD to bit + annulus fluid x TVD shoe to bit]` |
+| Minimum rate | Gas migration (IADC #34) and IADC #13 with the largest annulus, rounded **up** |
+
+- The influx is treated as original mud - gas is lighter, so the real limits are higher.
+- **The string limit depends on both columns.** The shoe is on the annulus side; the
+  string reaches it via the bit and the annulus below the shoe. Pumping the same rate down
+  both sides, the string reaches the bit first, and its limit falls to **466 psi** on the
+  baseline well (string full of kill fluid, open hole still original mud) before climbing
+  back to 830 as kill fluid fills the annulus below the shoe.
+- The chart steps are 10 steps of the annulus strokes (the longer side), plus a row at every
+  string crossover, kill fluid at the bit, kill fluid at the shoe, the kill point and
+  overdisplacement (the team's choice).
+- The IADC WellCAP Bullhead Worksheet is written for completions (tubing to perforations);
+  this is the drilling version, using the same ideas.
 
 ### Rounding: three rules
 
@@ -403,6 +438,50 @@ Lubricate and bleed - kill mud, annulus at surface 0.0489 bbl/ft
      11          135        12.0              146             0  hydrostatic control regained
 ```
 
+Bullheading while drilling, from `python examples/bullhead_well.py`:
+
+```
+BULLHEAD - annular shut, down the string and the backside (vertical, untapered)
+====================================================
+Kill fluid density               11.5 ppg  (rounded UP to the next 0.1)
+Max allowable mud weight         14.6 ppg  (formation limit, from the LOT)
+Equipment limit                 3,000 psi  (9-5/8" casing, tested - lowest rating / test)
+
+Drill string, surface to bit    190.4 bbl   1,627 stks
+Annulus, surface to bottom      533.2 bbl   4,557 stks  (kill point)
+Overdisplacement                 10.0 bbl  (team's choice)
+String keeps pumping after kill fluid reaches the bit: 2,930 stks (342.8 bbl) out the bit by the kill point
+
+Pump rate, SAME on both sides 3.0 bbl/min = 26 spm each side
+Time to the kill point            175 min  (4,557 stks / 26 spm)
+Gas migration                     185 ft/hr  (100 psi/hr / 0.5408 psi/ft)
+Minimum rate to beat it             2 spm  (largest annulus 0.0489 bbl/ft, rounded UP)
+
+Annular shut: pump kill fluid down the string AND the backside at the same rate.
+Pressure builds until injectivity is established, then falls as fluid is pushed
+away. The goal is injectivity, NOT breaking down the formation - stay below the
+max on both sides. Max = lower of the formation limit and the equipment limit.
+
+  Strokes  Kill fluid MD ft    String max  Annulus max   Actual string  Actual annulus
+    (each)   string  annulus         psi          psi             psi             psi
+        0        0        0       1,124        1,124   ____________    ____________
+      456    3,000    1,092         953        1,062   ____________    ____________
+      912    5,994    2,182         781          999   ____________    ____________
+    1,368    8,994    3,274         610          937   ____________    ____________
+    1,521   10,000    3,641         552          916   ____________    ____________  <- string crossover
+    1,588   10,900    3,800         501          907   ____________    ____________  <- string crossover
+    1,627   11,500    3,894         466          902   ____________    ____________  <- kill fluid at the bit (string)
+    1,824   11,500    4,365         466          875   ____________    ____________
+    2,152   11,500    5,150         466          830   ____________    ____________  <- kill fluid at the shoe (annulus)
+    2,280   11,500    5,477         485          830   ____________    ____________
+    2,736   11,500    6,638         552          830   ____________    ____________
+    3,192   11,500    7,802         618          830   ____________    ____________
+    3,648   11,500    8,963         685          830   ____________    ____________
+    4,104   11,500   10,126         751          830   ____________    ____________
+    4,557   11,500   11,500         830          830   ____________    ____________  <- kill fluid at bottom (annulus) - kill point
+    4,642   11,500   11,500         830          830   ____________    ____________  <- overdisplaced
+```
+
 ## Roadmap
 
 Each step adds one complication, with hand-worked tests checked before any code is
@@ -433,7 +512,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, tapered string: all three situations (**v0.12**)
 
 **Bullheading**
-- [ ] Vertical, untapered string
+- [x] Vertical, untapered string (**v0.13**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
@@ -475,6 +554,7 @@ src/killsheet/
                  friction by MD, with a row at every crossover and key point
   volumetric.py  volumetric method: bleed volume per cycle and the cycle table
   lubricate_and_bleed.py  lubricate and bleed cycles
+  bullhead.py    bullheading while drilling: limits for each side, equipment limit, chart
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
@@ -493,6 +573,7 @@ examples/
   volumetric_horizontal_well.py          volumetric + L&B, horizontal, pipe on bottom
   volumetric_deviated_tapered_well.py    deviated, tapered string
   volumetric_horizontal_tapered_well.py  horizontal, tapered string
+  bullhead_well.py                       bullhead, vertical, untapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
