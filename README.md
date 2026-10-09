@@ -21,8 +21,14 @@ well and string type. **Version 0.13** adds bullheading while drilling, **versio
 0.14** extends it to tapered strings, **version 0.15** to deviated and horizontal
 wells, and **version 0.16** completes bullheading on a surface stack for every well and
 string type. **Version 0.17** adds the reverse circulation kill for completion, workover
-and intervention (CWI) wells, **version 0.18** extends it to tapered tubing, and **version
-0.19** to deviated and horizontal completions. See the [roadmap](#roadmap).
+and intervention (CWI) wells, **version 0.18** extends it to tapered tubing, **version
+0.19** to deviated and horizontal completions, and **version 1.0** to deviated and
+horizontal completions with tapered tubing.
+
+**Version 1.0 completes the surface BOP stack:** all five methods - Driller's, Wait and
+Weight, volumetric and lubricate and bleed, bullheading, and reverse circulation - for
+vertical, deviated and horizontal wells with untapered and tapered strings. See the
+[roadmap](#roadmap).
 
 ## Why I built it
 
@@ -94,6 +100,8 @@ python examples/reverse_circulation_well.py     # reverse circulation, CWI well
 python examples/reverse_circulation_tapered_well.py   # reverse circulation, tapered tubing
 python examples/reverse_circulation_deviated_well.py     # reverse circulation, deviated CWI well
 python examples/reverse_circulation_horizontal_well.py   # reverse circulation, horizontal CWI well
+python examples/reverse_circulation_deviated_tapered_well.py     # deviated CWI well, tapered tubing
+python examples/reverse_circulation_horizontal_tapered_well.py   # horizontal CWI well, tapered tubing
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -591,9 +599,9 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Vertical, untapered string (**v0.17**)
 - [x] Vertical, tapered string (**v0.18**)
 - [x] Deviated and horizontal, untapered string (**v0.19**)
-- [ ] Deviated and horizontal, tapered string
+- [x] Deviated and horizontal, tapered string (**v1.0**) - **surface stack complete**
 
-### Web page (after the surface stack is complete)
+### Web page (next - the surface stack is complete)
 
 - [ ] Web page, with a kill plot of forecast drill pipe and annulus pressure beside
   the table, showing the inflection at each pipe change
@@ -654,6 +662,7 @@ examples/
   reverse_circulation_tapered_well.py    reverse circulation, tapered tubing
   reverse_circulation_deviated_well.py   reverse circulation, deviated CWI well
   reverse_circulation_horizontal_well.py reverse circulation, horizontal CWI well
+  reverse_circulation_*_tapered_well.py  deviated / horizontal CWI wells, tapered tubing
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

@@ -283,9 +283,10 @@ Surface stack:
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
 - Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) DONE v0.16
-- Reverse circulation:   CWI wells. (a) DONE v0.17, (b) DONE v0.18, (c) DONE v0.19, (d) next
+- Reverse circulation:   CWI wells. (a) DONE v0.17, (b) DONE v0.18, (c) DONE v0.19, (d) DONE v1.0
+SURFACE STACK COMPLETE (v1.0.0). Next: the web page, then the subsea stack.
 
-Web page (user: AFTER the surface stack is complete, BEFORE subsea):
+Web page (user: AFTER the surface stack is complete, BEFORE subsea) - NEXT:
 - Including the auto-generated kill plot beside the table: forecast drill pipe AND
   annulus pressure vs strokes, showing the inflection point at each pipe change
 
@@ -299,7 +300,8 @@ Subsea stack (adds choke line friction, riser margin, choke line volume/strokes)
 - License: MIT (`LICENSE`), copyright Kirk Keel.
 - CI: `.github/workflows/tests.yml` runs pytest and every `examples/*_well.py` on Python
   3.10–3.13 on every push and PR.
-- Release tags: v0.1, v0.1.1, v0.2 ...
+- Release tags: v0.1, v0.1.1, v0.2 ... v0.19, v1.0.0 (surface stack complete). Minor
+  number for each new capability, patch number for fixes.
 
 ## Commands
 

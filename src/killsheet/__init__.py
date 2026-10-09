@@ -3,4 +3,4 @@
 Oilfield units throughout: ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 """
 
-__version__ = "0.19.0"
+__version__ = "1.0.0"
