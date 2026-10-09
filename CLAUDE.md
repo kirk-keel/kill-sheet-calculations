@@ -25,6 +25,7 @@ baseline must keep working and keep its tests.
   - `volumetric.py` — volumetric method: annular capacity choices, IADC #35, cycle table
   - `lubricate_and_bleed.py` — lubricate and bleed cycles
   - `bullhead.py` — bullheading while drilling: limits for each side, equipment limit, chart
+  - `reverse_circulation.py` — reverse circulation kill for CWI wells
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -168,6 +169,35 @@ DEPTH of the kill mud, never a straight line against strokes:
   the bottom by definition (v0.13.1 fix: working depth back from rounded strokes stopped
   20 ft short of the bit on the tapered well — 1,326 x 0.117 = 155.1 of 155.2 bbl).
 
+**Reverse circulation** (user-confirmed, v0.17) — a COMPLETION / WORKOVER / INTERVENTION
+(CWI) well, reversing out with kill weight fluid:
+- Circulating point: an opened SSD or a hole punched in the tubing ABOVE the production
+  packer. Treat it as the "bit": the annulus is the pump side, the tubing the choke side.
+- KWF balances at the perfs WITH formation fluid left below the SSD:
+  tubing gradient = (Pform - SITP) / mid-perf TVD; P_SSD = Pform - gradient x (mid-perf - SSD);
+  KWF = P_SSD / (0.052 x SSD TVD) + margin; margin is OPTIONAL, default 0, added BEFORE the
+  rule-1 round-up. NEVER use ordinary rounding for kill weight.
+- NO SCR (user rule — circulating IS the kill; a reverse SCR can't be taken first).
+- Pre-start: open the SSD, let pressures stabilise, record SITP and SICP; SICP isn't known
+  until then (= P_SSD - annulus hydrostatic).
+- Holding rule for ALL constant-BHP kills: hold the side WITHOUT a homogeneous column while
+  the pump comes on/off, then swap to the side WITH a consistent column at kill rate.
+  Reverse: start-up holds TUBING at SITP (not casing at SICP); annulus pressure at rate =
+  OBSERVED ICP; shut-down holds tubing.
+- FCP = observed ICP - (KWF - packer fluid) x 0.052 x SSD TVD (drop rounded DOWN); it equals
+  friction minus overbalance at the SSD, so if <= 0 floor at 0 and WARN.
+- Schedule: annulus pump pressure ICP -> FCP by TVD of the kill fluid; hold FCP while the
+  tubing is displaced. TVD for pressures, MD for volumes/strokes.
+- Friction warning (user's wording): "In reverse circulation, the high-friction path is the
+  return side. If the choke is wide open and pump pressure still climbs above FCP, BHP is
+  rising. Reduce the rate." Holding pump pressure keeps BHP constant — the choke absorbs it.
+- Limits: lower of fracture at the TOP perf minus annulus hydrostatic, and the lowest-rated
+  completion/surface equipment. Show both: packer fluid and kill fluid in the annulus.
+- End: both gauges 0 ±10 psi, then a FLOW CHECK. Optional bullhead of the volume below the
+  SSD (tubing to packer + casing to top perf).
+- Printer: import as `from killsheet import reverse_circulation as reverse` — its
+  final_circulating_pressure must NOT shadow formulas.final_circulating_pressure.
+
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
 `ValueError` saying so rather than calculating from 0.
@@ -249,7 +279,7 @@ Surface stack:
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
 - Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) DONE v0.16
-- Reverse circulation:   (a)-(d), (a) is next
+- Reverse circulation:   CWI wells. (a) DONE v0.17, (b) next
 
 Web page (user: AFTER the surface stack is complete, BEFORE subsea):
 - Including the auto-generated kill plot beside the table: forecast drill pipe AND

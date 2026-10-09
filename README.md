@@ -20,7 +20,8 @@ and horizontal wells, and **version 0.12** completes them on a surface stack for
 well and string type. **Version 0.13** adds bullheading while drilling, **version
 0.14** extends it to tapered strings, **version 0.15** to deviated and horizontal
 wells, and **version 0.16** completes bullheading on a surface stack for every well and
-string type. See the [roadmap](#roadmap).
+string type. **Version 0.17** adds the reverse circulation kill for completion, workover
+and intervention (CWI) wells. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -51,6 +52,10 @@ all types of wells using every well control technique at their disposal.
 - **Bullheading (drilling):** annular shut, kill fluid down the string and the backside
   at the same rate; a max-pressure chart for each side (formation limit from the LOT,
   capped by the lowest equipment rating or test), with columns for the actual pressures
+- **Reverse circulation (CWI wells):** kill weight fluid down the annulus through an opened
+  SSD or tubing punch and up the tubing; kill weight balanced at the perfs with formation
+  fluid left below the SSD, the annulus pump-pressure schedule from the observed ICP to FCP,
+  both annulus limits, and an optional bullhead of the volume below the SSD
 
 ## How to run it
 
@@ -84,6 +89,7 @@ python examples/bullhead_deviated_well.py       # bullhead, deviated, untapered 
 python examples/bullhead_horizontal_well.py     # bullhead, horizontal, untapered string
 python examples/bullhead_deviated_tapered_well.py     # bullhead, deviated, tapered string
 python examples/bullhead_horizontal_tapered_well.py   # bullhead, horizontal, tapered string
+python examples/reverse_circulation_well.py     # reverse circulation, CWI well
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -265,6 +271,34 @@ breaking down the formation**.
 - **Tapered strings** change *when* kill fluid reaches each point (the strokes), not the
   limit at that point: on the deviated example the string still bottoms out at 466 psi,
   but at 1,603 strokes instead of 1,812.
+
+### Reverse circulation (completion, workover, intervention)
+
+Kill weight fluid is pumped down the tubing x casing **annulus** (the pump side), through an
+opened **SSD** or a hole punched in the tubing above the production packer, and back up the
+**tubing** (the return side, through the choke). The SSD plays the part of the bit - **the
+sides are swapped** from a drilling kill. There is no dedicated IADC reverse circulation
+worksheet; this is built from the IADC basics.
+
+| Item | Rule |
+|---|---|
+| Tubing fluid gradient | `(Formation pressure - SITP) / Mid-perf TVD` |
+| Pressure at the SSD | `Formation pressure - tubing gradient x (Mid-perf TVD - SSD TVD)` - formation fluid stays below the SSD |
+| Kill weight fluid | `Pressure at SSD / (0.052 x SSD TVD) + margin (default 0)`, rounded **up** to the next 0.1 ppg |
+| Before start-up | Open the SSD, let pressures stabilise, record SITP and SICP. SICP isn't known until then: `Pressure at SSD - annulus hydrostatic` |
+| Start-up | Bring the pump up on the **annulus** holding **tubing** pressure (the choke side) at the SITP |
+| ICP | **Observed** - the annulus pressure read at kill rate. No SCR: on a CWI well circulating *is* the kill |
+| FCP | `Observed ICP - (KWF - packer fluid) x 0.052 x SSD TVD`, drop rounded down; at or below 0 it is floored at 0 with a warning |
+| Schedule | Annulus pump pressure steps down from ICP to FCP as kill fluid reaches the SSD (TVD), then holds FCP while the tubing is displaced (MD for volumes) |
+| Limits | Lower of fracture pressure at the **top perf** minus annulus hydrostatic, and the lowest-rated completion or surface equipment - shown with packer fluid and with kill fluid in the annulus |
+| End | Shut down holding tubing; both gauges 0 ±10 psi; **flow check** |
+| Optional | Bullhead the volume below the SSD (tubing to the packer + casing to the top perf) |
+
+> In reverse circulation, the high-friction path is the return side. If the choke is wide
+> open and pump pressure still climbs above FCP, BHP is rising. Reduce the rate.
+
+Holding pump pressure constant keeps bottom hole pressure constant however much tubing
+friction there is, because the choke absorbs it.
 
 ### Rounding: three rules
 
@@ -536,8 +570,8 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, untapered string (**v0.15**)
 - [x] Deviated and horizontal, tapered string (**v0.16**)
 
-**Reverse circulation**
-- [ ] Vertical, untapered string
+**Reverse circulation** (completion, workover, intervention wells)
+- [x] Vertical, untapered string (**v0.17**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
@@ -574,6 +608,7 @@ src/killsheet/
   volumetric.py  volumetric method: bleed volume per cycle and the cycle table
   lubricate_and_bleed.py  lubricate and bleed cycles
   bullhead.py    bullheading while drilling: limits for each side, equipment limit, chart
+  reverse_circulation.py  reverse circulation kill for CWI wells
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
@@ -598,6 +633,7 @@ examples/
   bullhead_horizontal_well.py            bullhead, horizontal, untapered string
   bullhead_deviated_tapered_well.py      bullhead, deviated, tapered string
   bullhead_horizontal_tapered_well.py    bullhead, horizontal, tapered string
+  reverse_circulation_well.py            reverse circulation, CWI well
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

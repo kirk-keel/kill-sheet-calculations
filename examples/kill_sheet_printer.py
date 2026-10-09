@@ -21,6 +21,7 @@ from killsheet.formulas import (
     max_allowable_mud_weight,
 )
 from killsheet.rounding import round_to_tenth, round_to_whole_number
+from killsheet import reverse_circulation as reverse
 from killsheet.schedule import STEP, TEN_STEPS, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
@@ -415,3 +416,98 @@ def print_bullhead_sheet(
             print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>8,} {tvd_at_md(row.string_kill_md_ft, survey):>8,}"
                   f"   {row.annulus_kill_md_ft:>8,} {tvd_at_md(row.annulus_kill_md_ft, survey):>8,}"
                   f"  {row.string_max_psi:>7,}  {row.annulus_max_psi:>7,}   ______   ______{label}")
+
+
+def print_reverse_circulation_sheet(
+    title,
+    formation_pressure_psi,
+    sitp_psi,
+    top_perf_tvd_ft,
+    bottom_perf_tvd_ft,
+    ssd_tvd_ft,
+    packer_tvd_ft,
+    packer_fluid_ppg,
+    fracture_gradient_psi_per_ft,
+    pump_output_bbl_per_stk,
+    pump_rate_bbl_per_min,
+    equipment_ratings,
+    annulus_sections,
+    tubing_sections,
+    casing_capacity_bbl_per_ft,
+    observed_icp_psi=None,
+    margin_ppg=0,
+    circulating_point="SSD",
+):
+    """Reverse circulation kill sheet for a completion / workover / intervention (CWI) well.
+
+    annulus_sections / tubing_sections: (name, capacity bbl/ft, length ft MD),
+    surface down to the circulating point (an opened SSD or a tubing punch).
+    observed_icp_psi: the annulus pressure read once at kill rate (None until then).
+    """
+    annulus = without_names(annulus_sections)
+    tubing = without_names(tubing_sections)
+    pump = pump_output_bbl_per_stk
+    mid_perf = round_to_whole_number((top_perf_tvd_ft + bottom_perf_tvd_ft) / 2)
+    gradient = reverse.tubing_fluid_gradient(formation_pressure_psi, sitp_psi, mid_perf)
+    p_ssd = reverse.pressure_at_ssd(formation_pressure_psi, gradient, mid_perf, ssd_tvd_ft)
+    kwf = reverse.kill_weight_fluid(p_ssd, ssd_tvd_ft, margin_ppg)
+    sicp = reverse.sicp_after_ssd_opened(p_ssd, packer_fluid_ppg, ssd_tvd_ft)
+    sitp = reverse.sitp_after_ssd_opened(p_ssd, gradient, ssd_tvd_ft)
+    frac = reverse.fracture_pressure(fracture_gradient_psi_per_ft, top_perf_tvd_ft)
+    limit_name, limit_psi = equipment_limit(equipment_ratings)
+    max_packer = reverse.max_annulus_pressure(frac, kwf, packer_fluid_ppg, 0, ssd_tvd_ft, gradient, top_perf_tvd_ft)
+    max_kill = reverse.max_annulus_pressure(frac, kwf, packer_fluid_ppg, ssd_tvd_ft, ssd_tvd_ft, gradient, top_perf_tvd_ft)
+    annulus_strokes = surface_to_bit_strokes(annulus, pump)
+    tubing_strokes = surface_to_bit_strokes(tubing, pump)
+    point = circulating_point
+
+    print(title)
+    print("=" * 52)
+    print(f"Tubing fluid gradient        {gradient:>8.4f} psi/ft  (({formation_pressure_psi:,} - {sitp_psi:,}) / "
+          f"{mid_perf:,} mid-perf TVD)")
+    print(f"Pressure at the {point:<13}{p_ssd:>8,} psi  (formation fluid left below it)")
+    print(f"Kill weight fluid            {kwf:>8.1f} ppg  (balances at the {point}; rounded UP, margin {margin_ppg} ppg)")
+    print()
+    print(f"Before start-up: open the {point}, let pressures stabilise, record:")
+    print(f"  SITP                       {sitp:>8,} psi")
+    print(f"  SICP                       {sicp:>8,} psi  (= pressure at the {point} - annulus hydrostatic)")
+    print()
+    print(f"Fracture at the top perf     {frac:>8,} psi  ({fracture_gradient_psi_per_ft} x {top_perf_tvd_ft:,})")
+    print("Max allowable annulus pressure      formation     equipment     used")
+    print(f"  packer fluid in the annulus     {max_packer:>9,}     {limit_psi:>9,}  {min(max_packer, limit_psi):>7,}")
+    print(f"  kill fluid in the annulus       {max_kill:>9,}     {limit_psi:>9,}  {min(max_kill, limit_psi):>7,}")
+    print(f"  equipment limit: {limit_name} (lowest rating / test)")
+    print()
+    print(f"Annulus, surface to {point}     {total_volume(annulus):>7.1f} bbl  {annulus_strokes:>6,} stks")
+    print(f"Tubing, {point} to surface     {total_volume(tubing):>7.1f} bbl  {tubing_strokes:>6,} stks")
+    print(f"Kill rate                    {pump_rate_bbl_per_min:>8.1f} bbl/min = "
+          f"{round_to_whole_number(pump_rate_bbl_per_min / pump)} spm")
+    print()
+    if observed_icp_psi is None:
+        print("Observed ICP: not yet read - bring the pump up holding tubing at the SITP, then enter")
+        print("the annulus pressure at kill rate to build the schedule.")
+        return
+    fcp, floored = reverse.final_circulating_pressure(observed_icp_psi, kwf, packer_fluid_ppg, ssd_tvd_ft)
+    print(f"Observed ICP                 {observed_icp_psi:>8,} psi  (annulus pressure at kill rate)")
+    print(f"FCP                          {fcp:>8,} psi  (ICP - ({kwf:.1f} - {packer_fluid_ppg:.1f}) x 0.052 x "
+          f"{ssd_tvd_ft:,}, drop rounded DOWN)")
+    if floored:
+        print(f"  ! {reverse.FCP_FLOOR_WARNING}")
+    print()
+    print("Reverse circulation - sides are swapped: pump on the ANNULUS, choke on the TUBING")
+    print_steps(reverse.reverse_circulation_steps(sitp, observed_icp_psi, fcp, annulus_strokes, tubing_strokes))
+    print()
+    print("  Annulus pump pressure schedule")
+    print("    Strokes   Kill fluid MD ft   TVD ft   Pump psi   Max allowable psi")
+    for row in reverse.reverse_schedule(observed_icp_psi, kwf, packer_fluid_ppg, annulus, tubing, pump, frac, gradient,
+                                top_perf_tvd_ft, limit_psi, ssd_tvd_ft=ssd_tvd_ft):
+        label = "" if row.label == "step" else f"   <- {row.label}"
+        print(f"    {row.strokes:>7,}  {row.kill_fluid_md_ft:>16,}  {row.kill_fluid_tvd_ft:>7,}  {row.pump_psi:>9,}"
+              f"  {row.max_allowable_psi:>18,}{label}")
+    print()
+    below = reverse.volume_below_ssd(tubing[-1][0], packer_tvd_ft - ssd_tvd_ft, casing_capacity_bbl_per_ft,
+                             top_perf_tvd_ft - packer_tvd_ft)
+    initial, final = reverse.bullhead_below_ssd_limits(frac, kwf, ssd_tvd_ft, gradient, top_perf_tvd_ft)
+    print(f"Optional: bullhead the {below:.1f} bbl below the {point} (tubing to the packer + casing to the top perf)")
+    print(f"  max tubing pressure {min(initial, limit_psi):,} psi at the start, {min(final, limit_psi):,} psi "
+          "once displaced to the top perf")
