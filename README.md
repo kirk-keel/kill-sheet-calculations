@@ -14,7 +14,8 @@ deviated and horizontal wells, and **version 0.4** completes the Driller's metho
 surface stack for every well and string type. **Version 0.5** adds Wait and Weight,
 **version 0.6** extends it to tapered strings, **version 0.7** to deviated and
 horizontal wells, and **version 0.8** completes Wait and Weight on a surface stack for
-every well and string type. See the [roadmap](#roadmap).
+every well and string type. **Version 0.9** adds the volumetric method and lubricate and
+bleed. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -37,6 +38,11 @@ all types of wells using every well control technique at their disposal.
   rate (recalculated if the drill pipe reads more than 10 psi off), and a drill pipe
   step-down schedule from ICP to FCP that follows the depth of the kill mud, in 10 equal
   steps (default) or every 100 strokes, with every crossover shown
+- **Volumetric method:** bleed volume per cycle (IADC #35) for the smallest, average and
+  longest annulus, and a cycle table driven by the 15-minute SICP readings until the gas
+  is at surface. Works with pipe on bottom, pipe above the influx, or pipe out of the hole
+- **Lubricate and bleed:** kill weight mud, annulus at surface; turns the bbl the crew
+  pumps into the psi to bleed, until hydrostatic control is regained
 
 ## How to run it
 
@@ -54,6 +60,9 @@ python examples/wait_and_weight_deviated_well.py     # deviated, Wait and Weight
 python examples/wait_and_weight_horizontal_well.py   # horizontal, Wait and Weight
 python examples/wait_and_weight_deviated_tapered_well.py     # deviated tapered, Wait and Weight
 python examples/wait_and_weight_horizontal_tapered_well.py   # horizontal tapered, Wait and Weight
+python examples/volumetric_pipe_on_bottom_well.py      # volumetric + L&B, pipe on bottom
+python examples/volumetric_pipe_above_influx_well.py   # volumetric + L&B, pipe above the influx
+python examples/volumetric_pipe_out_of_hole_well.py    # volumetric + L&B, pipe out of the hole
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -152,6 +161,33 @@ own row. In a horizontal well the drill pipe pressure bottoms out at the heel an
 Follow the schedule up to FCP. Treating the well as vertical would hold too much pressure:
 218 psi too much at the heel of the horizontal example, straight onto a shoe with 796 psi
 MAASP.
+
+### Volumetric method and lubricate and bleed
+
+Used when the well **can't be circulated**: pipe out of the hole, pipe above the influx
+and unable to strip back, pipe in the hole and unable to pump. Describe the annulus
+**from the bottom up, including sections with no pipe in them** - one calculator then
+covers every situation. The team killing the well chooses the **safety margin** and
+**working pressure**.
+
+| Stage | What to do |
+|---|---|
+| Wait | Let SICP rise by safety margin + working pressure, no bleeding |
+| Volumetric cycle | Bleed `(working pressure / mud gradient) x annular capacity` bbl (IADC #35), holding casing constant; let SICP rise by the working pressure; repeat |
+| Gas at surface | SICP rises **no more than 10 psi in 15 minutes** |
+| Lubricate and bleed | Pump kill weight mud until casing rises by the working pressure; read the bbl pumped; let it lubricate; bleed back to the starting pressure minus `bbl x KWM gradient / annular capacity at surface`; repeat until casing reads **0** |
+
+- **Annular capacity** for the volumetric bleed is the team's choice: there is no single
+  industry standard. The default is the **smallest annulus** the gas will pass through,
+  which bleeds the least mud per cycle; the average and longest are printed alongside.
+- Both the bleed volume and the psi bled are **limits**, so both are rounded **down**.
+- Hold pressures above MAASP are **warned, not stopped**: as the gas comes up the casing
+  pressure keeps rising.
+- The tables are driven by what the crew reads - the 15-minute SICP rise after each
+  volumetric cycle, and the bbl pumped each lubricate cycle - because no calculator can
+  predict when the gas will reach surface.
+- IADC gives the volumetric formulas (#34, #35). There is no dedicated IADC lubricate and
+  bleed formula; it is built from the IADC basics (#12 height of fluid, #13/#14 hydrostatic).
 
 ### Rounding: three rules
 
@@ -296,6 +332,54 @@ Wait and Weight
       1,627           11,500   11,500      829   <- bit
 ```
 
+Volumetric method and lubricate and bleed, from `python examples/volumetric_pipe_on_bottom_well.py`:
+
+```
+VOLUMETRIC - pipe on bottom, unable to pump (vertical, untapered)
+====================================================
+Mud gradient                   0.5408 psi/ft  (10.4 ppg)
+Kill mud gradient              0.5980 psi/ft  (11.5 ppg)
+MAASP                           1,124 psi
+Safety margin / working       100 / 50 psi  (team's choice)
+
+Annulus, bottom up                      Capacity  Length ft
+  DC x 8-1/2" hole                       0.0291        600
+  HWDP x 8-1/2" hole                     0.0459        900
+  DP x 8-1/2" hole                       0.0459      4,850
+  DP x 9-5/8" casing                     0.0489      5,150
+
+Volume to bleed per 50 psi = (working pressure / mud gradient) x annular capacity
+  smallest annulus      0.0291 bbl/ft    2.6 bbl  <- used
+  average annulus       0.0464 bbl/ft    4.2 bbl
+  longest annulus       0.0489 bbl/ft    4.5 bbl
+
+Volumetric method
+  wait: let SICP rise from 800 to 950 psi (safety margin + working pressure)
+  Cycle  Hold casing psi  Bleed bbl  Total bbl  15-min rise
+      1              950        2.6        2.6        30 psi
+      2            1,000        2.6        5.2        28 psi
+      3            1,050        2.6        7.8        25 psi
+      4            1,100        2.6       10.4        22 psi
+      5            1,150        2.6       13.0        20 psi  ! above MAASP - continue
+      6            1,200        2.6       15.6        14 psi  ! above MAASP - continue
+      7            1,250        2.6       18.2         4 psi  ! above MAASP - continue  GAS AT SURFACE
+
+Lubricate and bleed - kill mud, annulus at surface 0.0489 bbl/ft
+  hydrostatic added = bbl pumped x 0.5980 / 0.0489
+  Cycle  Pump to psi  bbl pumped  Hydrostatic psi  Bleed to psi
+      1        1,304         6.0               73         1,181
+      2        1,231         7.0               85         1,096
+      3        1,146         8.0               97           999
+      4        1,049         9.0              110           889
+      5          939        10.0              122           767
+      6          817        10.0              122           645
+      7          695        11.0              134           511
+      8          561        11.0              134           377
+      9          427        12.0              146           231
+     10          281        12.0              146            85
+     11          135        12.0              146             0  hydrostatic control regained
+```
+
 ## Roadmap
 
 Each step adds one complication, with hand-worked tests checked before any code is
@@ -320,7 +404,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, tapered string (**v0.8**)
 
 **Volumetric method and lubricate and bleed**
-- [ ] Vertical, untapered string
+- [x] Vertical, untapered string: pipe on bottom, pipe above the influx, pipe out of the hole (**v0.9**)
 - [ ] Vertical, tapered string
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
@@ -366,6 +450,8 @@ src/killsheet/
   wait_and_weight.py  Wait and Weight kill steps, ICP check and recalculation
   schedule.py    Wait and Weight drill pipe step-down schedule: hydrostatic by TVD,
                  friction by MD, with a row at every crossover and key point
+  volumetric.py  volumetric method: bleed volume per cycle and the cycle table
+  lubricate_and_bleed.py  lubricate and bleed cycles
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
@@ -376,6 +462,9 @@ examples/
   wait_and_weight_horizontal_well.py  horizontal, Wait and Weight
   wait_and_weight_deviated_tapered_well.py    deviated tapered, Wait and Weight
   wait_and_weight_horizontal_tapered_well.py  horizontal tapered, Wait and Weight
+  volumetric_pipe_on_bottom_well.py      volumetric + L&B, pipe on bottom
+  volumetric_pipe_above_influx_well.py   volumetric + L&B, pipe above the influx
+  volumetric_pipe_out_of_hole_well.py    volumetric + L&B, pipe out of the hole
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

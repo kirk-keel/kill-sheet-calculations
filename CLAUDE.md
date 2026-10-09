@@ -22,6 +22,8 @@ baseline must keep working and keep its tests.
   - `kill_steps.py` — KillStep, stage names, ±10 psi tolerance, gauge checks (shared)
   - `drillers.py` — Driller's method kill steps (the baseline method)
   - `wait_and_weight.py` — Wait and Weight kill steps, ICP check, recalculation
+  - `volumetric.py` — volumetric method: annular capacity choices, IADC #35, cycle table
+  - `lubricate_and_bleed.py` — lubricate and bleed cycles
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -109,6 +111,27 @@ DEPTH of the kill mud, never a straight line against strokes:
   it was up to 38 psi short (v0.5 bug, fixed v0.5.1); a 5" x 3-1/2" taper, 112 psi short.
   Never go back to a straight line against strokes.
 
+**Volumetric method and lubricate and bleed** (user-confirmed, v0.9):
+- Used whenever the well can't be circulated (pipe out of the hole, pipe above the
+  influx and unable to strip back, pipe in the hole and unable to pump, ...). The user
+  describes the annulus BOTTOM UP, including sections with NO pipe; one calculator covers
+  every situation, and each roadmap step covers all of them.
+- Safety margin and working pressure are chosen by the team killing the well (inputs,
+  no defaults).
+- Volumetric bleed per cycle = (working pressure / mud gradient) x annular capacity
+  (IADC #35), rounded DOWN to 0.1 bbl. Annular capacity is the team's choice (no single
+  industry standard); DEFAULT = SMALLEST annulus the gas passes through (least bleed).
+  Average (total volume / length, 4 places) and longest are shown for comparison.
+- First hold = SICP + safety margin + working pressure; each cycle adds the working
+  pressure. Above MAASP: WARN AND CONTINUE (pressure keeps rising as gas comes up).
+- Gas at surface = SICP rises no more than 10 psi over a 15 minute wait. The table is
+  driven by those readings and runs until that happens (it can't be predicted).
+- Lubricate and bleed only once gas is at surface: kill weight mud, annulus AT SURFACE.
+  Pump until casing rises by the working pressure (the pressure decides the volume);
+  bleed back to the pre-pump pressure minus bbl x KWM gradient / surface capacity
+  (rounded DOWN). Repeat until casing = 0 (hydrostatic control regained).
+- No dedicated IADC lubricate and bleed formula — built from #12, #13, #14. Say so.
+
 **SIDPP must be > 0.** A zero drill pipe reading with a float in the string is not a
 true SIDPP — the float must be bumped to find it. `kill_mud_weight` raises a
 `ValueError` saying so rather than calculating from 0.
@@ -187,7 +210,7 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
-- Volumetric method and lubricate and bleed: (a)-(d), (a) is next
+- Volumetric method and lubricate and bleed: (a) DONE v0.9 (all three situations), (b) next
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)
 

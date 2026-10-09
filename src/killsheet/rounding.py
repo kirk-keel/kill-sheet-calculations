@@ -49,6 +49,14 @@ def round_to_tenth(value):
     return math.floor(round(value * 10, 6) + 0.5) / 10
 
 
+def round_to_4_places(value):
+    """Round to the NEAREST 0.0001, with .00005 always going up (0.046365 -> 0.0464).
+
+    Used for capacities (bbl/ft) and gradients (psi/ft), per the IADC table.
+    """
+    return math.floor(round(value * 10_000, 6) + 0.5) / 10_000
+
+
 def round_to_whole_number(value):
     """Round to the NEAREST whole number, with .5 always going up (895.5 -> 896).
 

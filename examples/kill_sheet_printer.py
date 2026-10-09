@@ -22,6 +22,14 @@ from killsheet.strokes import (
     strokes_to_length,
     surface_to_bit_strokes,
 )
+from killsheet.lubricate_and_bleed import lubricate_and_bleed_table
+from killsheet.volumetric import (
+    SMALLEST,
+    annular_capacity_choices,
+    mud_gradient,
+    volume_to_bleed_per_cycle,
+    volumetric_table,
+)
 from killsheet.wait_and_weight import (
     ICP_MATCHES,
     ICP_RECALCULATED,
@@ -191,3 +199,74 @@ def print_steps(steps):
             line += f" for {step.strokes:,} stks"
         print(line)
         print(f"{'':15}{step.note}")
+
+
+def print_volumetric_sheet(
+    title,
+    original_mud_weight_ppg,
+    kill_mud_weight_ppg,
+    shoe_tvd_ft,
+    lot_pressure_psi,
+    test_mud_weight_ppg,
+    sicp_psi,
+    safety_margin_psi,
+    working_pressure_psi,
+    annulus_bottom_up,
+    sicp_rises_after_each_cycle,
+    sicp_gas_at_surface_psi,
+    bbl_pumped_each_cycle,
+    capacity_choice=SMALLEST,
+):
+    """Volumetric method, then lubricate and bleed, for any situation.
+
+    annulus_bottom_up: (name, capacity bbl/ft, length ft) from the BOTTOM UP,
+    including sections with no pipe in them. The top section is the annulus
+    at surface, used for lubricate and bleed.
+    """
+    annulus = without_names(annulus_bottom_up)
+    gradient = mud_gradient(original_mud_weight_ppg)
+    kill_gradient = mud_gradient(kill_mud_weight_ppg)
+    maasp_psi = maasp(max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg),
+                      original_mud_weight_ppg, shoe_tvd_ft)
+    choices = annular_capacity_choices(annulus)
+    bleed_bbl = volume_to_bleed_per_cycle(working_pressure_psi, gradient, choices[capacity_choice])
+
+    print(title)
+    print("=" * 52)
+    print(f"Mud gradient                 {gradient:>8.4f} psi/ft  ({original_mud_weight_ppg:.1f} ppg)")
+    print(f"Kill mud gradient            {kill_gradient:>8.4f} psi/ft  ({kill_mud_weight_ppg:.1f} ppg)")
+    print(f"MAASP                        {maasp_psi:>8,} psi")
+    print(f"Safety margin / working      {safety_margin_psi:>4,} / {working_pressure_psi:,} psi  (team's choice)")
+    print()
+    print("Annulus, bottom up                      Capacity  Length ft")
+    for name, capacity, length in annulus_bottom_up:
+        print(f"  {name:<36}{capacity:>9.4f}  {length:>9,}")
+    print()
+    print(f"Volume to bleed per {working_pressure_psi} psi = (working pressure / mud gradient) x annular capacity")
+    for choice, capacity in choices.items():
+        marker = "  <- used" if choice == capacity_choice else ""
+        bbl = volume_to_bleed_per_cycle(working_pressure_psi, gradient, capacity)
+        print(f"  {choice:<20}{capacity:>8.4f} bbl/ft  {bbl:>5.1f} bbl{marker}")
+    print()
+
+    print("Volumetric method")
+    print(f"  wait: let SICP rise from {sicp_psi:,} to "
+          f"{sicp_psi + safety_margin_psi + working_pressure_psi:,} psi (safety margin + working pressure)")
+    print("  Cycle  Hold casing psi  Bleed bbl  Total bbl  15-min rise")
+    for row in volumetric_table(sicp_psi, safety_margin_psi, working_pressure_psi, bleed_bbl,
+                                maasp_psi, sicp_rises_after_each_cycle):
+        note = "  GAS AT SURFACE" if row.gas_at_surface else ""
+        warning = "  ! above MAASP - continue" if row.above_maasp else ""
+        print(f"  {row.cycle:>5}  {row.hold_psi:>15,}  {row.bleed_bbl:>9.1f}  {row.total_bled_bbl:>9.1f}"
+              f"  {row.sicp_rise_psi:>8} psi{warning}{note}")
+    print()
+
+    surface_capacity = annulus[-1][0]
+    print(f"Lubricate and bleed - kill mud, annulus at surface {surface_capacity:.4f} bbl/ft")
+    print(f"  hydrostatic added = bbl pumped x {kill_gradient:.4f} / {surface_capacity:.4f}")
+    print("  Cycle  Pump to psi  bbl pumped  Hydrostatic psi  Bleed to psi")
+    for row in lubricate_and_bleed_table(sicp_gas_at_surface_psi, working_pressure_psi, bbl_pumped_each_cycle,
+                                         kill_gradient, surface_capacity):
+        done = "  hydrostatic control regained" if row.bleed_to_psi == 0 else ""
+        print(f"  {row.cycle:>5}  {row.pump_to_psi:>11,}  {row.bbl_pumped:>10.1f}  {row.hydrostatic_added_psi:>15,}"
+              f"  {row.bleed_to_psi:>12,}{done}")

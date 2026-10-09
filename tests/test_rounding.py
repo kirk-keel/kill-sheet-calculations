@@ -8,6 +8,7 @@ import pytest
 from killsheet.rounding import (
     round_down_to_tenth,
     round_down_to_whole_number,
+    round_to_4_places,
     round_to_tenth,
     round_to_whole_number,
     round_up_to_next_tenth,
@@ -78,3 +79,16 @@ def test_round_down_to_whole_number(value, expected):
 )
 def test_round_to_tenth(value, expected):
     assert round_to_tenth(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (0.046365, 0.0464),     # average annular capacity, 533.2 / 11,500
+        (0.07018651, 0.0702),   # 8.5^2 / 1029.4
+        (0.5408, 0.5408),       # already 4 places
+        (0.12345, 0.1235),      # .00005 goes up
+    ],
+)
+def test_round_to_4_places(value, expected):
+    assert round_to_4_places(value) == expected
