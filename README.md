@@ -15,7 +15,7 @@ surface stack for every well and string type. **Version 0.5** adds Wait and Weig
 **version 0.6** extends it to tapered strings, **version 0.7** to deviated and
 horizontal wells, and **version 0.8** completes Wait and Weight on a surface stack for
 every well and string type. **Version 0.9** adds the volumetric method and lubricate and
-bleed. See the [roadmap](#roadmap).
+bleed, and **version 0.10** extends them to tapered strings. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -63,6 +63,9 @@ python examples/wait_and_weight_horizontal_tapered_well.py   # horizontal tapere
 python examples/volumetric_pipe_on_bottom_well.py      # volumetric + L&B, pipe on bottom
 python examples/volumetric_pipe_above_influx_well.py   # volumetric + L&B, pipe above the influx
 python examples/volumetric_pipe_out_of_hole_well.py    # volumetric + L&B, pipe out of the hole
+python examples/volumetric_tapered_pipe_on_bottom_well.py      # tapered string versions of the three
+python examples/volumetric_tapered_pipe_above_influx_well.py
+python examples/volumetric_tapered_pipe_out_of_hole_well.py
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -182,7 +185,10 @@ covers every situation. The team killing the well chooses the **safety margin** 
   which bleeds the least mud per cycle; the average and longest are printed alongside.
 - Both the bleed volume and the psi bled are **limits**, so both are rounded **down**.
 - Hold pressures above MAASP are **warned, not stopped**: as the gas comes up the casing
-  pressure keeps rising.
+  pressure keeps rising. On the tapered example (MAASP 889) a 100 / 50 psi margin puts
+  the very first hold at 950, so every cycle is warned.
+- The smallest annulus isn't always around the BHA: on the tapered example it is the
+  5" DP inside the 7" casing, near surface.
 - The tables are driven by what the crew reads - the 15-minute SICP rise after each
   volumetric cycle, and the bbl pumped each lubricate cycle - because no calculator can
   predict when the gas will reach surface.
@@ -405,7 +411,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 
 **Volumetric method and lubricate and bleed**
 - [x] Vertical, untapered string: pipe on bottom, pipe above the influx, pipe out of the hole (**v0.9**)
-- [ ] Vertical, tapered string
+- [x] Vertical, tapered string: all three situations (**v0.10**)
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
 
@@ -465,6 +471,7 @@ examples/
   volumetric_pipe_on_bottom_well.py      volumetric + L&B, pipe on bottom
   volumetric_pipe_above_influx_well.py   volumetric + L&B, pipe above the influx
   volumetric_pipe_out_of_hole_well.py    volumetric + L&B, pipe out of the hole
+  volumetric_tapered_*_well.py           the same three situations, tapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

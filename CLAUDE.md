@@ -210,7 +210,8 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
 - Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
-- Volumetric method and lubricate and bleed: (a) DONE v0.9 (all three situations), (b) next
+- Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10 (all three
+                         situations each), (c) next
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)
 
