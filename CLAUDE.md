@@ -96,6 +96,8 @@ DEPTH of the kill mud, never a straight line against strokes:
   Horizontal: pressure bottoms out at the heel, then CLIMBS to FCP along the lateral —
   user rule: the crew follows the schedule up to FCP (no minimum hold).
 - After a high-ICP recalculation, the schedule uses the RETAKEN SIDPP.
+- A step row is kept even when a key point or crossover lands a few strokes from it
+  (user rule, v0.8): steps stay evenly spaced and the named row marks the inflection.
 - MD of kill mud after N strokes (`md_after_strokes`): volume = N x pump output (0.1 bbl)
   minus surface lines; walk the string; inside a section MD = start + section length x
   (volume left / ROUNDED section volume), so crossover strokes land exactly on crossovers.
@@ -184,8 +186,8 @@ Order: surface stack (all methods) -> web page -> subsea stack (all methods).
 
 Surface stack:
 - Driller's method:      (a) DONE v0.1/v0.1.1, (b) DONE v0.2, (c) DONE v0.3, (d) DONE v0.4
-- Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) next
-- Volumetric method and lubricate and bleed: (a)-(d)
+- Wait and Weight:       (a) DONE v0.5 (fixed v0.5.1), (b) DONE v0.6, (c) DONE v0.7, (d) DONE v0.8
+- Volumetric method and lubricate and bleed: (a)-(d), (a) is next
 - Bullheading:           (a)-(d)
 - Reverse circulation:   (a)-(d)
 

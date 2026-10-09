@@ -12,8 +12,9 @@ and the Driller's method. Everything after that is built on top of it, one
 complication at a time. **Version 0.2** adds tapered strings, **version 0.3** adds
 deviated and horizontal wells, and **version 0.4** completes the Driller's method on a
 surface stack for every well and string type. **Version 0.5** adds Wait and Weight,
-**version 0.6** extends it to tapered strings, and **version 0.7** to deviated and
-horizontal wells. See the [roadmap](#roadmap).
+**version 0.6** extends it to tapered strings, **version 0.7** to deviated and
+horizontal wells, and **version 0.8** completes Wait and Weight on a surface stack for
+every well and string type. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -51,6 +52,8 @@ python examples/wait_and_weight_well.py   # baseline well, Wait and Weight
 python examples/wait_and_weight_tapered_well.py   # vertical tapered string, Wait and Weight
 python examples/wait_and_weight_deviated_well.py     # deviated, Wait and Weight
 python examples/wait_and_weight_horizontal_well.py   # horizontal, Wait and Weight
+python examples/wait_and_weight_deviated_tapered_well.py     # deviated tapered, Wait and Weight
+python examples/wait_and_weight_horizontal_tapered_well.py   # horizontal tapered, Wait and Weight
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -314,7 +317,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Vertical, untapered string (**v0.5**; schedule by depth of kill mud **v0.5.1**)
 - [x] Vertical, tapered string (**v0.6**)
 - [x] Deviated and horizontal, untapered string (**v0.7**)
-- [ ] Deviated and horizontal, tapered string
+- [x] Deviated and horizontal, tapered string (**v0.8**)
 
 **Volumetric method and lubricate and bleed**
 - [ ] Vertical, untapered string
@@ -371,6 +374,8 @@ examples/
   wait_and_weight_tapered_well.py  vertical tapered string, Wait and Weight
   wait_and_weight_deviated_well.py    deviated, Wait and Weight
   wait_and_weight_horizontal_well.py  horizontal, Wait and Weight
+  wait_and_weight_deviated_tapered_well.py    deviated tapered, Wait and Weight
+  wait_and_weight_horizontal_tapered_well.py  horizontal tapered, Wait and Weight
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
