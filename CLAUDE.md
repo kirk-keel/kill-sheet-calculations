@@ -195,6 +195,7 @@ DEPTH of the kill mud, never a straight line against strokes:
   completion/surface equipment. Show both: packer fluid and kill fluid in the annulus.
 - End: both gauges 0 ±10 psi, then a FLOW CHECK. Optional bullhead of the volume below the
   SSD (tubing to packer + casing to top perf).
+- Tapered tubing (v0.18): a schedule row at every ANNULUS crossover, at its exact depth.
 - Printer: import as `from killsheet import reverse_circulation as reverse` — its
   final_circulating_pressure must NOT shadow formulas.final_circulating_pressure.
 
@@ -279,7 +280,7 @@ Surface stack:
 - Volumetric method and lubricate and bleed: (a) DONE v0.9, (b) DONE v0.10, (c) DONE v0.11,
                          (d) DONE v0.12 (all three situations each)
 - Bullheading:           (a) DONE v0.13 (fixed v0.13.1), (b) DONE v0.14, (c) DONE v0.15, (d) DONE v0.16
-- Reverse circulation:   CWI wells. (a) DONE v0.17, (b) next
+- Reverse circulation:   CWI wells. (a) DONE v0.17, (b) DONE v0.18, (c) next
 
 Web page (user: AFTER the surface stack is complete, BEFORE subsea):
 - Including the auto-generated kill plot beside the table: forecast drill pipe AND

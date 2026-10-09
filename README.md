@@ -21,7 +21,8 @@ well and string type. **Version 0.13** adds bullheading while drilling, **versio
 0.14** extends it to tapered strings, **version 0.15** to deviated and horizontal
 wells, and **version 0.16** completes bullheading on a surface stack for every well and
 string type. **Version 0.17** adds the reverse circulation kill for completion, workover
-and intervention (CWI) wells. See the [roadmap](#roadmap).
+and intervention (CWI) wells, and **version 0.18** extends it to tapered tubing. See the
+[roadmap](#roadmap).
 
 ## Why I built it
 
@@ -90,6 +91,7 @@ python examples/bullhead_horizontal_well.py     # bullhead, horizontal, untapere
 python examples/bullhead_deviated_tapered_well.py     # bullhead, deviated, tapered string
 python examples/bullhead_horizontal_tapered_well.py   # bullhead, horizontal, tapered string
 python examples/reverse_circulation_well.py     # reverse circulation, CWI well
+python examples/reverse_circulation_tapered_well.py   # reverse circulation, tapered tubing
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -299,6 +301,11 @@ worksheet; this is built from the IADC basics.
 
 Holding pump pressure constant keeps bottom hole pressure constant however much tubing
 friction there is, because the choke absorbs it.
+
+**Tapered tubing** changes the annulus size, so the schedule gets a row at every annulus
+crossover. On the example (3-1/2" over 2-7/8") the pump pressure drops about 84 psi per step
+in the tighter 3-1/2" x 5-1/2" annulus and about 63 below the crossover; the pressures at
+the SSD, FCP and the limits don't change.
 
 ### Rounding: three rules
 
@@ -572,7 +579,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 
 **Reverse circulation** (completion, workover, intervention wells)
 - [x] Vertical, untapered string (**v0.17**)
-- [ ] Vertical, tapered string
+- [x] Vertical, tapered string (**v0.18**)
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
 
@@ -634,6 +641,7 @@ examples/
   bullhead_deviated_tapered_well.py      bullhead, deviated, tapered string
   bullhead_horizontal_tapered_well.py    bullhead, horizontal, tapered string
   reverse_circulation_well.py            reverse circulation, CWI well
+  reverse_circulation_tapered_well.py    reverse circulation, tapered tubing
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string

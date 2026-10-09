@@ -48,7 +48,7 @@ from killsheet.rounding import (
     round_up_to_next_tenth,
 )
 from killsheet.schedule import strokes_per_step_for_ten_steps
-from killsheet.strokes import md_after_strokes, surface_to_bit_strokes, total_length
+from killsheet.strokes import md_after_strokes, strokes_to_length, surface_to_bit_strokes, total_length
 
 FRICTION_WARNING = ("In reverse circulation, the high-friction path is the return side. If the choke is "
                     "wide open and pump pressure still climbs above FCP, BHP is rising. Reduce the rate.")
@@ -57,6 +57,7 @@ FCP_FLOOR_WARNING = ("FCP worked out at or below 0: annulus friction is less tha
 
 # Row labels.
 STEP = "step"
+ANNULUS_CROSSOVER = "annulus crossover"
 AT_SSD = "kill fluid at the SSD - FCP"
 TUBING_DISPLACED = "tubing displaced - kill fluid at surface"
 
@@ -183,6 +184,13 @@ def reverse_schedule(observed_icp_psi, kill_fluid_ppg, packer_fluid_ppg, annulus
     for step in range(10):
         strokes = step * strokes_per_step
         rows.append(row(strokes, md_after_strokes(strokes, annulus_sections_top_down, pump), STEP))
+    # Annulus crossovers (a tapered tubing string changes the annulus size): the
+    # line bends there, so each gets its own row at its exact depth.
+    md_ft = 0
+    for _capacity, length_ft in annulus_sections_top_down[:-1]:
+        md_ft += length_ft
+        rows.append(row(strokes_to_length(annulus_sections_top_down, md_ft, pump), md_ft, ANNULUS_CROSSOVER))
+    rows.sort(key=lambda r: r.strokes)
     at_ssd = row(annulus_strokes, ssd_md_ft, AT_SSD)
     rows.append(at_ssd._replace(pump_psi=fcp))
     rows.append(at_ssd._replace(strokes=annulus_strokes + tubing_strokes, pump_psi=fcp, label=TUBING_DISPLACED))
