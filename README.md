@@ -15,8 +15,9 @@ surface stack for every well and string type. **Version 0.5** adds Wait and Weig
 **version 0.6** extends it to tapered strings, **version 0.7** to deviated and
 horizontal wells, and **version 0.8** completes Wait and Weight on a surface stack for
 every well and string type. **Version 0.9** adds the volumetric method and lubricate and
-bleed, **version 0.10** extends them to tapered strings, and **version 0.11** to
-deviated and horizontal wells. See the [roadmap](#roadmap).
+bleed, **version 0.10** extends them to tapered strings, **version 0.11** to deviated
+and horizontal wells, and **version 0.12** completes them on a surface stack for every
+well and string type. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -69,6 +70,8 @@ python examples/volumetric_tapered_pipe_above_influx_well.py
 python examples/volumetric_tapered_pipe_out_of_hole_well.py
 python examples/volumetric_deviated_well.py     # volumetric + L&B, deviated, pipe on bottom
 python examples/volumetric_horizontal_well.py   # volumetric + L&B, horizontal, pipe on bottom
+python examples/volumetric_deviated_tapered_well.py     # deviated, tapered string
+python examples/volumetric_horizontal_tapered_well.py   # horizontal, tapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -427,7 +430,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Vertical, untapered string: pipe on bottom, pipe above the influx, pipe out of the hole (**v0.9**)
 - [x] Vertical, tapered string: all three situations (**v0.10**)
 - [x] Deviated and horizontal, untapered string: all three situations (**v0.11**)
-- [ ] Deviated and horizontal, tapered string
+- [x] Deviated and horizontal, tapered string: all three situations (**v0.12**)
 
 **Bullheading**
 - [ ] Vertical, untapered string
@@ -488,6 +491,8 @@ examples/
   volumetric_tapered_*_well.py           the same three situations, tapered string
   volumetric_deviated_well.py            volumetric + L&B, deviated, pipe on bottom
   volumetric_horizontal_well.py          volumetric + L&B, horizontal, pipe on bottom
+  volumetric_deviated_tapered_well.py    deviated, tapered string
+  volumetric_horizontal_tapered_well.py  horizontal, tapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
