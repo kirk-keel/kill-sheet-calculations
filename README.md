@@ -17,8 +17,8 @@ horizontal wells, and **version 0.8** completes Wait and Weight on a surface sta
 every well and string type. **Version 0.9** adds the volumetric method and lubricate and
 bleed, **version 0.10** extends them to tapered strings, **version 0.11** to deviated
 and horizontal wells, and **version 0.12** completes them on a surface stack for every
-well and string type. **Version 0.13** adds bullheading while drilling. See the
-[roadmap](#roadmap).
+well and string type. **Version 0.13** adds bullheading while drilling, and
+**version 0.14** extends it to tapered strings. See the [roadmap](#roadmap).
 
 ## Why I built it
 
@@ -77,6 +77,7 @@ python examples/volumetric_horizontal_well.py   # volumetric + L&B, horizontal, 
 python examples/volumetric_deviated_tapered_well.py     # deviated, tapered string
 python examples/volumetric_horizontal_tapered_well.py   # horizontal, tapered string
 python examples/bullhead_well.py                # bullhead, vertical, untapered string
+python examples/bullhead_tapered_well.py        # bullhead, vertical, tapered string
 python examples/tapered_well.py      # vertical, tapered string
 python examples/deviated_well.py     # deviated (build and hold), untapered string
 python examples/horizontal_well.py   # horizontal, untapered string
@@ -246,6 +247,9 @@ breaking down the formation**.
   overdisplacement (the team's choice).
 - The IADC WellCAP Bullhead Worksheet is written for completions (tubing to perforations);
   this is the drilling version, using the same ideas.
+- On the tapered example (MAASP 889) the tight 5" DP x 7" casing annulus moves kill fluid
+  down faster than the string at first, so the annulus limit falls first; the string
+  limit then falls to **231 psi** once it reaches the bit through the 3-1/2" pipe.
 
 ### Rounding: three rules
 
@@ -513,7 +517,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 
 **Bullheading**
 - [x] Vertical, untapered string (**v0.13**; kill fluid reaches the bit when strokes round down **v0.13.1**)
-- [ ] Vertical, tapered string
+- [x] Vertical, tapered string (**v0.14**)
 - [ ] Deviated and horizontal, untapered string
 - [ ] Deviated and horizontal, tapered string
 
@@ -574,6 +578,7 @@ examples/
   volumetric_deviated_tapered_well.py    deviated, tapered string
   volumetric_horizontal_tapered_well.py  horizontal, tapered string
   bullhead_well.py                       bullhead, vertical, untapered string
+  bullhead_tapered_well.py               bullhead, vertical, tapered string
   tapered_well.py        vertical, tapered string
   deviated_well.py       deviated, untapered string
   horizontal_well.py     horizontal, untapered string
