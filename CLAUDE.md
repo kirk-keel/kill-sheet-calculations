@@ -27,6 +27,7 @@ baseline must keep working and keep its tests.
   - `bullhead.py` — bullheading while drilling: limits for each side, equipment limit, chart
   - `reverse_circulation.py` — reverse circulation kill for CWI wells
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
+  - `kill_plot.py` — kill plot: single-bubble gas model, forecast DP and casing lines, shoe check
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
 
@@ -315,8 +316,9 @@ Decided by the user:
   sheet: ignores temperature, Z, dispersion/slip; NOT valid in oil-based mud; usually
   over-predicts the peak (errs safe). Applies to W&W and later subsea too.
   - Influx gradient FROM THE GAUGES (user): height = pit gain / bottom annulus capacity
-    (whole ft); gradient = OMW gradient - (SICP - SIDPP) / height (4 places). WARN if it is
-    above ~0.25 psi/ft (probably not gas). If the gradient is <= 0 or >= the mud gradient,
+    (whole ft); gradient = OMW gradient - (SICP - SIDPP) / height (4 places). Above 0.25
+    psi/ft WARN: "Influx gradient suggests liquid, not gas. The plot assumes an expanding gas
+    bubble, so casing and shoe peaks are overstated (conservative)." If the gradient is <= 0 or >= the mud gradient,
     DON'T use it: fall back to 0.1 psi/ft and WARN that the gauges are inconsistent (bad
     gauges, or the influx isn't at the bottom).
   - Gas pressure at the TOP of the bubble (user: conservative - more expansion, higher
@@ -334,6 +336,12 @@ Decided by the user:
     height 344 ft, BHP 6,919. Driller's 1st circ: peak casing 1,272 at 4,097 stk (pit gain
     53.6), max shoe 3,681 at 2,240 stk, ends 700. W&W: peak casing 1,044 at 3,997 stk (pit
     gain 65.3), max shoe 3,640 at 1,616 stk, casing 42 at kill mud to surface. Frac 3,909.
+    Module (`kill_plot.py`) gives the same pressures; strokes move by 1-2 because the pumped
+    volume is rounded to 0.1 bbl (Driller's peak 4,097 stk / 53.6 bbl, max shoe 2,241; W&W
+    peak 3,998 / 65.4 bbl, max shoe 1,629 - a flat top at 3,639-3,640 from ~1,600 stk).
+  - Geometry: the bottom of the gas and the kill mud front move with ROUNDED section volumes
+    (so they pass crossovers on crossover strokes); the gas column uses the CAPACITY
+    (height = volume / capacity, like the influx height on the kill sheet).
 - Print: page 1 = well schematic (casing, shoe, open hole, string sections/crossovers, bit,
   KOP/EOB/heel) with KMW, ICP, FCP, MAMW, MAASP (original/after kill), volumes in bbl AND
   strokes. Page 2 = the table WITH an "Actual" column for observed values, plus the plot.
@@ -363,8 +371,12 @@ Volumetric / L&B plot (user): x-axis = bbl bled / pumped; casing = hold pressure
 - Pipe on bottom WITH a float: only casing rises (by SF + Pw, agreed before starting); DP flat.
 - Off bottom / out of hole: see the "never plot 0" labels above.
 
-NEXT step: write `kill_plot.py` + tests from the hand example above (scratch model reproduced
-these numbers), then the page.
+DONE: `kill_plot.py` + `tests/test_kill_plot.py` - Driller's and W&W, VERTICAL wells only
+(untapered/tapered). Tests: pressures exact, stroke of each maximum within a window
+(+/-30 for the W&W shoe plateau) - exact-stroke asserts break on harmless rounding.
+NEXT, in this order (user): (1) SF / trapped-pressure bleed / flow check in the Driller's and
+W&W step lists, (2) the web page, (3) deviated/horizontal with a hand example first,
+(4) the volumetric plot.
 
 ## Git / GitHub
 
