@@ -9,10 +9,21 @@ Constant bottomhole pressure with a SAFETY MARGIN (SF, chosen by the team):
               rises to SIDPP + SF. The pump is brought up holding casing at
               SICP + SF. At kill rate the drill pipe reads ICP + SF and the
               choke operator swaps to the drill pipe gauge.
-              BHP = formation pressure + SF for the whole kill.
-  End:        both gauges read the same TRAPPED pressure (the SF less any
-              overbalance of the kill mud). If they don't match, something is
-              wrong. Bleed it off in small steps through the choke, check 0
+  Driller's:  BHP = formation pressure + SF for the whole kill. In the 2nd
+              circulation the drill pipe falls to FCP + SIDPP + SF - kill mud
+              overbalance (871 psi on the baseline, not FCP + SF = 879) and is
+              held there. If the SF is smaller than the kill mud's extra
+              overbalance, casing reaches 0 (choke fully open) and from then on
+              BHP and the drill pipe rise a little (toward FCP).
+  W&W:        the step-down chart uses SIDPP, but the kill mud (KMW rounded UP)
+              adds a little more than SIDPP. BHP is worked back from the
+              scheduled drill pipe pressure at every stroke:
+                  BHP = Formation pressure + Scheduled DP - SIDPP
+                        + Kill mud hydrostatic gain - Friction
+              It ends at formation pressure + SF + (overbalance - SIDPP).
+  End:        both gauges read the same TRAPPED pressure (Driller's:
+              SIDPP + SF - overbalance; W&W: SF). If they don't match, something
+              is wrong. Bleed it off in small steps through the choke, check 0
               (+/- 10 psi), then flow check. Pressure building back = not dead.
 
 Single-bubble gas model (forecasts the casing line while gas is in the annulus):
@@ -35,6 +46,9 @@ whole foot, each pressure rounded once at the end. KMW still rounds UP
 
 from typing import NamedTuple
 
+from killsheet import drillers
+from killsheet import wait_and_weight
+from killsheet.formulas import kill_mud_overbalance
 from killsheet.kill_steps import GAUGE_TOLERANCE_PSI
 from killsheet.rounding import (
     round_down_to_whole_number,
@@ -92,6 +106,7 @@ class AnnulusForecast(NamedTuple):
     gas_top_ft: int | None         # None once the gas is out
     gas_bottom_ft: int | None
     gas_volume_bbl: float | None   # = pit gain while all the gas is in the well
+    bhp_psi: int                   # actual BHP: above the BHP held if casing would read below 0
 
 
 class PlotPoint(NamedTuple):
@@ -259,7 +274,7 @@ def _hydrostatic(layers, down_to_ft):
 def annulus_forecast(strokes, bhp_psi, well, gas=None, kill_mud_at_bit_strokes=None):
     """Forecast casing and shoe pressure after a number of strokes (vertical well).
 
-    bhp_psi: held constant (formation pressure + safety margin).
+    bhp_psi: the BHP being held (formation pressure + safety margin).
     gas:     the GasInflux at shut-in, or None if there's no gas (2nd circulation).
     kill_mud_at_bit_strokes: strokes when kill mud reaches the bit, or None for
              original mud only (Driller's 1st circulation).
@@ -314,11 +329,13 @@ def annulus_forecast(strokes, bhp_psi, well, gas=None, kill_mud_at_bit_strokes=N
                   + [(top_ft, bottom_ft, gradient)]
                   + _mud_layers(bottom_ft, bit_ft, kill_mud_top_ft, well))
 
-    casing_psi = bhp_psi - _hydrostatic(layers, bit_ft)
+    annulus_psi = _hydrostatic(layers, bit_ft)
+    # A gauge can't read below 0: an overbalanced annulus reads 0 psi with the
+    # choke fully open, and BHP is then the annulus hydrostatic (above bhp_psi).
+    casing_psi = max(0, bhp_psi - annulus_psi)
     shoe_psi = casing_psi + _hydrostatic(layers, well.shoe_tvd_ft)
-    # A gauge can't read below 0: an overbalanced annulus reads 0 psi.
-    return AnnulusForecast(strokes, max(0, round_to_whole_number(casing_psi)),
-                           round_to_whole_number(shoe_psi), top_ft, bottom_ft, volume_bbl)
+    return AnnulusForecast(strokes, round_to_whole_number(casing_psi), round_to_whole_number(shoe_psi),
+                           top_ft, bottom_ft, volume_bbl, round_to_whole_number(casing_psi + annulus_psi))
 
 
 # --- Checks --------------------------------------------------------------------
@@ -329,18 +346,6 @@ def fracture_at_shoe(mamw_ppg, shoe_tvd_ft):
         Fracture pressure = 0.052 x MAMW x Shoe TVD
     """
     return round_down_to_whole_number(0.052 * mamw_ppg * shoe_tvd_ft)
-
-
-def trapped_pressure(sidpp_psi, safety_margin_psi, mud_gradient_psi_per_ft,
-                     kill_mud_gradient_psi_per_ft, bit_tvd_ft):
-    """Drill pipe pressure (psi) at the final shut-in, kill mud to surface.
-
-        Trapped = SIDPP + SF - (KMW gradient - OMW gradient) x Bit TVD
-
-    The casing must read the same. A gauge can't read below 0.
-    """
-    overbalance_psi = (kill_mud_gradient_psi_per_ft - mud_gradient_psi_per_ft) * bit_tvd_ft
-    return max(0, round_to_whole_number(sidpp_psi + safety_margin_psi - overbalance_psi))
 
 
 def trapped_pressures_match(drill_pipe_psi, casing_psi):
@@ -368,9 +373,29 @@ def plot_warnings(peak, max_shoe, fracture_psi, maasp_psi, trapped_dp_psi, trapp
 # --- The plots -----------------------------------------------------------------
 
 def _forecasts(first_stroke, last_stroke, bhp_psi, well, gas, kill_mud_at_bit_strokes):
-    """Annulus forecast for every stroke from first to last."""
-    return [annulus_forecast(s, bhp_psi, well, gas, kill_mud_at_bit_strokes)
+    """Annulus forecast for every stroke from first to last.
+
+    bhp_psi: a number (held constant) or a function of the strokes.
+    """
+    bhp_at = bhp_psi if callable(bhp_psi) else (lambda _strokes: bhp_psi)
+    return [annulus_forecast(s, bhp_at(s), well, gas, kill_mud_at_bit_strokes)
             for s in range(first_stroke, last_stroke + 1)]
+
+
+def _friction(scr_psi, kill_mud_friction_psi, kill_mud_md_ft, bit_md_ft):
+    """Drill string friction (psi, not rounded) with kill mud down to an MD.
+
+        Friction = SCR + (Kill mud friction - SCR) x (MD of kill mud / Bit MD)
+    """
+    return scr_psi + (kill_mud_friction_psi - scr_psi) * kill_mud_md_ft / bit_md_ft
+
+
+def _hydrostatic_gain(overbalance_psi, kill_mud_tvd_ft, bit_tvd_ft):
+    """Extra hydrostatic (psi, not rounded) of kill mud down to a TVD.
+
+        Gain = Kill mud overbalance x (TVD of kill mud / Bit TVD)
+    """
+    return overbalance_psi * kill_mud_tvd_ft / bit_tvd_ft
 
 
 def _events(forecasts, shoe_tvd_ft):
@@ -399,9 +424,12 @@ def drillers_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_margin_psi,
     both circulations (the 2nd starts where the 1st ended).
 
     1st circulation: drill pipe held at ICP + SF; casing from the gas model.
-    2nd circulation: casing held at SIDPP + SF while kill mud goes to the bit
-    (drill pipe falls ICP + SF -> FCP + SF), then drill pipe held at FCP + SF
-    while casing falls to the trapped pressure.
+    2nd circulation: casing held at SIDPP + SF while kill mud goes to the bit:
+        DP = SIDPP + SF - Kill mud hydrostatic gain + Friction
+    which falls from ICP + SF to FCP + SIDPP + SF - overbalance. That reading
+    is held while kill mud goes to surface and casing falls to the trapped
+    pressure. If casing reaches 0 first (choke fully open), BHP goes above
+    formation pressure + SF and the drill pipe rises by the same amount.
     annulus_sections: ALL of the annulus, listed from the bit UP.
     """
     sf = safety_margin_psi
@@ -412,6 +440,19 @@ def drillers_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_margin_psi,
     bhp_psi = formation_pressure(sidpp_psi, well.mud_gradient_psi_per_ft, bit_tvd_ft) + sf
     bottoms_up = strokes_for_volume(total_volume(annulus_sections), pump_output_bbl_per_stk)
     to_bit = surface_to_bit_strokes(drill_string_sections, pump_output_bbl_per_stk, surface_line_volume_bbl)
+    bit_md_ft = total_length(drill_string_sections)
+    overbalance_psi = kill_mud_overbalance(kill_mud_weight_ppg, original_mud_weight_ppg, bit_tvd_ft)
+    scr_psi = icp_psi - sidpp_psi
+    dp_at_bit = drillers.drill_pipe_with_kill_mud_at_bit(sidpp_psi, fcp_psi, sf, overbalance_psi)
+
+    def drill_pipe_at(strokes):
+        """2nd circulation drill pipe (vertical well: TVD = MD of the kill mud)."""
+        if strokes >= to_bit:
+            return dp_at_bit + max(0, second[strokes].bhp_psi - bhp_psi)
+        md_ft = md_after_strokes(strokes, drill_string_sections, pump_output_bbl_per_stk,
+                                 surface_line_volume_bbl)
+        return round_to_whole_number(sidpp_psi + sf - _hydrostatic_gain(overbalance_psi, md_ft, bit_tvd_ft)
+                                     + _friction(scr_psi, fcp_psi, md_ft, bit_md_ft))
 
     # 1st circulation - original mud, gas out.
     first = _forecasts(0, bottoms_up, bhp_psi, well, gas, None)
@@ -442,16 +483,22 @@ def drillers_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_margin_psi,
                                  surface_line_volume_bbl):
         if row.strokes > 0:
             label = "kill mud at the bit" if row.strokes == to_bit else row.label
-            points.append(PlotPoint(offset + row.strokes, row.pressure_psi + sf,
+            points.append(PlotPoint(offset + row.strokes, drill_pipe_at(row.strokes),
                                     second[row.strokes].casing_psi, None, label))
     for s in _stroke_marks(to_bit + bottoms_up, step_strokes):
         if s > to_bit:
-            points.append(PlotPoint(offset + s, fcp_psi + sf, second[s].casing_psi, None, ""))
-    trapped_dp = trapped_pressure(sidpp_psi, sf, well.mud_gradient_psi_per_ft,
-                                  well.kill_mud_gradient_psi_per_ft, bit_tvd_ft)
+            points.append(PlotPoint(offset + s, drill_pipe_at(s), second[s].casing_psi, None, ""))
+    choke_open = next((s for s in range(to_bit, to_bit + bottoms_up + 1)
+                       if second[s].bhp_psi > bhp_psi), None)
+    if choke_open is not None:
+        points.append(PlotPoint(offset + choke_open, drill_pipe_at(choke_open), 0, None,
+                                "casing at 0, choke fully open - drill pipe rises toward FCP"))
+        points.sort(key=lambda p: p.strokes)
+    trapped_dp = drillers.trapped_pressure(sidpp_psi, sf, overbalance_psi)
     trapped_casing = second[-1].casing_psi
     end = offset + to_bit + bottoms_up
-    points.append(PlotPoint(end, fcp_psi + sf, trapped_casing, None, "kill mud at surface"))
+    points.append(PlotPoint(end, drill_pipe_at(to_bit + bottoms_up), trapped_casing, None,
+                            "kill mud at surface"))
     points.append(PlotPoint(end, trapped_dp, trapped_casing, None,
                             "shut in: both read the trapped pressure - bleed to 0, check, flow check"))
 
@@ -466,14 +513,19 @@ def drillers_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_margin_psi,
 def wait_and_weight_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_margin_psi, pit_gain_bbl,
                               original_mud_weight_ppg, kill_mud_weight_ppg, bit_tvd_ft, shoe_tvd_ft,
                               mamw_ppg, maasp_psi, drill_string_sections, annulus_sections,
-                              pump_output_bbl_per_stk, surface_line_volume_bbl=0, step_strokes=100):
+                              pump_output_bbl_per_stk, surface_line_volume_bbl=0, step_strokes=100,
+                              kill_mud_friction_psi=None):
     """Kill plot for Wait and Weight, vertical well. One circulation:
     from the first stroke kill mud goes down the drill pipe while the gas and
     original mud come up the annulus.
 
     Drill pipe: step-down chart + SF until kill mud is at the bit, then FCP + SF.
-    Casing:     gas model, with kill mud filling the annulus from the bit up.
+    BHP:        worked back from the scheduled drill pipe at every stroke:
+                    BHP = Formation pressure + DP - SIDPP + Hydrostatic gain - Friction
+    Casing:     gas model at that BHP, with kill mud filling the annulus from the bit up.
     sidpp_psi and sicp_psi are the values RETAKEN just before start-up.
+    kill_mud_friction_psi: leave out unless the ICP was recalculated (then it
+                    is Actual SCR x KMW / OMW); it defaults to the FCP.
     annulus_sections: ALL of the annulus, listed from the bit UP.
     """
     sf = safety_margin_psi
@@ -481,21 +533,36 @@ def wait_and_weight_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_marg
                        mud_gradient(original_mud_weight_ppg), mud_gradient(kill_mud_weight_ppg))
     gas, gas_warning = gas_influx(pit_gain_bbl, sidpp_psi, sicp_psi, well.mud_gradient_psi_per_ft,
                                   bit_tvd_ft, annulus_sections)
-    bhp_psi = formation_pressure(sidpp_psi, well.mud_gradient_psi_per_ft, bit_tvd_ft) + sf
+    formation_psi = formation_pressure(sidpp_psi, well.mud_gradient_psi_per_ft, bit_tvd_ft)
     bottoms_up = strokes_for_volume(total_volume(annulus_sections), pump_output_bbl_per_stk)
     to_bit = surface_to_bit_strokes(drill_string_sections, pump_output_bbl_per_stk, surface_line_volume_bbl)
     end = to_bit + bottoms_up
     bit_md_ft = total_length(drill_string_sections)
+    overbalance_psi = kill_mud_overbalance(kill_mud_weight_ppg, original_mud_weight_ppg, bit_tvd_ft)
+    scr_psi = icp_psi - sidpp_psi
+    friction_with_kill_mud = fcp_psi if kill_mud_friction_psi is None else kill_mud_friction_psi
+
+    def kill_mud_md(strokes):
+        if strokes >= to_bit:
+            return bit_md_ft
+        return md_after_strokes(strokes, drill_string_sections, pump_output_bbl_per_stk,
+                                surface_line_volume_bbl)
 
     def drill_pipe_at(strokes):
         """Step-down chart + SF until kill mud is at the bit, then FCP + SF."""
         if strokes >= to_bit:
             return fcp_psi + sf
-        md_ft = md_after_strokes(strokes, drill_string_sections, pump_output_bbl_per_stk,
-                                 surface_line_volume_bbl)
+        md_ft = kill_mud_md(strokes)
         return drill_pipe_pressure(icp_psi, fcp_psi, sidpp_psi, md_ft, md_ft, bit_md_ft, bit_md_ft) + sf
 
-    forecasts = _forecasts(0, end, bhp_psi, well, gas, to_bit)
+    def bhp_at(strokes):
+        """BHP worked back from the scheduled drill pipe (vertical well: TVD = MD)."""
+        md_ft = kill_mud_md(strokes)
+        return (formation_psi + drill_pipe_at(strokes) - sidpp_psi
+                + _hydrostatic_gain(overbalance_psi, md_ft, bit_tvd_ft)
+                - _friction(scr_psi, friction_with_kill_mud, md_ft, bit_md_ft))
+
+    forecasts = _forecasts(0, end, bhp_at, well, gas, to_bit)
     start_shoe = sicp_psi + sf + round_to_whole_number(well.mud_gradient_psi_per_ft * shoe_tvd_ft)
     forecasts[0] = forecasts[0]._replace(casing_psi=sicp_psi + sf, shoe_psi=start_shoe)
     events = _events(forecasts, shoe_tvd_ft)
@@ -516,8 +583,7 @@ def wait_and_weight_kill_plot(sidpp_psi, sicp_psi, icp_psi, fcp_psi, safety_marg
     for s in sorted(set(_stroke_marks(end, step_strokes)) | set(events)):
         f = forecasts[s]
         points.append(PlotPoint(s, drill_pipe_at(s), f.casing_psi, f.gas_volume_bbl, events.get(s, "")))
-    trapped_dp = trapped_pressure(sidpp_psi, sf, well.mud_gradient_psi_per_ft,
-                                  well.kill_mud_gradient_psi_per_ft, bit_tvd_ft)
+    trapped_dp = wait_and_weight.trapped_pressure(sf, fcp_psi, friction_with_kill_mud)
     trapped_casing = forecasts[end].casing_psi
     points.append(PlotPoint(end, fcp_psi + sf, trapped_casing, None, "kill mud at surface"))
     points.append(PlotPoint(end, trapped_dp, trapped_casing, None,

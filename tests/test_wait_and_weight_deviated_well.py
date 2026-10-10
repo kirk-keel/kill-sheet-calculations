@@ -8,7 +8,7 @@ bit 12,712 ft MD / 11,500 ft TVD. ICP 1,400, FCP 829, SIDPP 650, SCR 750.
 Verified by a well control specialist before this test was written.
 """
 
-from killsheet.kill_steps import CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
+from killsheet.kill_steps import BLEED, CHECK, FLOW_CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
 from killsheet.schedule import BIT, CROSSOVER, STEP, drill_pipe_pressure, pressure_schedule
 from killsheet.wait_and_weight import wait_and_weight_method
 
@@ -19,14 +19,18 @@ DRILL_STRING = [(0.0178, 11_212), (0.0087, 900), (0.0077, 600)]
 
 
 def test_wait_and_weight_steps():
-    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, 1812, 5039)
+    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, 1812, 5039, 0)   # SF 0
     assert [(s.stage, s.gauge, s.hold_psi, s.strokes) for s in steps] == [
         (WEIGHT_UP, "pits", None, None),
         (START_UP, "casing", 800, None),
+        (CHECK, "drill pipe", 1400, None),           # ICP check at kill rate
         (HOLD, "drill pipe", 1400, 1812),
         (HOLD, "drill pipe", 829, 5039),
         (SHUT_DOWN, "casing", None, None),
-        (CHECK, "drill pipe and casing", 0, None),
+        (CHECK, "drill pipe and casing", 0, None),   # trapped pressure = SF = 0
+        (BLEED, "choke", None, None),
+        (CHECK, "drill pipe and casing", 0, None),   # well dead
+        (FLOW_CHECK, "well", None, None),
     ]
 
 

@@ -334,11 +334,19 @@ Decided by the user:
     still round DOWN (rule 2).
   - Hand example (user-approved), baseline well, pit gain 10 bbl, SF 50: gradient 0.1048,
     height 344 ft, BHP 6,919. Driller's 1st circ: peak casing 1,272 at 4,097 stk (pit gain
-    53.6), max shoe 3,681 at 2,240 stk, ends 700. W&W: peak casing 1,044 at 3,997 stk (pit
-    gain 65.3), max shoe 3,640 at 1,616 stk, casing 42 at kill mud to surface. Frac 3,909.
-    Module (`kill_plot.py`) gives the same pressures; strokes move by 1-2 because the pumped
-    volume is rounded to 0.1 bbl (Driller's peak 4,097 stk / 53.6 bbl, max shoe 2,241; W&W
-    peak 3,998 / 65.4 bbl, max shoe 1,629 - a flat top at 3,639-3,640 from ~1,600 stk).
+    53.6), max shoe 3,681 at 2,240 stk, ends 700. Driller's 2nd circ: casing held 700, DP
+    falls 1,450 -> 947 / 901 at the crossovers -> 871 with kill mud at the bit, held 871 to
+    surface; trapped 42. Frac 3,909.
+    W&W (user-approved v1.1 values; BHP back-calculated from the scheduled DP each stroke,
+    ends 6,927 = 6,919 + 8 rounding overbalance): peak casing 1,048 at 4,000 stk (65.1 bbl),
+    max shoe 3,648 at 1,618 stk (flat top 3,647-3,648 from ~1,601 to 1,631), casing 806 at
+    top of gas at the shoe (2,243 stk), 862 kill mud at the bit, 273 gas out, 50 kill mud at
+    surface = trapped (SF). Superseded W&W values (before the fix): 1,044 / 3,640 / 42.
+    Module (`kill_plot.py`) strokes move by 1-2 from the hand example because the pumped
+    volume is rounded to 0.1 bbl (Driller's peak 4,097 stk, max shoe 2,241).
+  - Casing never forecast below 0: if BHP - annulus hydrostatic < 0 the choke is fully open,
+    casing = 0 and BHP = annulus hydrostatic (Driller's SF 0: casing 0 at ~10,687 stk, DP
+    rises 821 -> 829 at surface).
   - Geometry: the bottom of the gas and the kill mud front move with ROUNDED section volumes
     (so they pass crossovers on crossover strokes); the gas column uses the CAPACITY
     (height = volume / capacity, like the influx height on the kill sheet).
@@ -353,16 +361,32 @@ Constant BHP start-up with a SAFETY MARGIN (SF, team input), every method (user)
   Pump brought up holding casing at SICP + SF; once at kill rate and stable, swap to the drill
   pipe gauge, which now reads ICP + SF. BHP = formation pressure + SF the whole kill.
 - SF is CARRIED THROUGH the kill: FCP + SF, step-down chart + SF, 2nd circulation casing held
-  at SIDPP + SF. At final shut-in BOTH gauges must read the same trapped pressure (baseline:
-  DP = 650 + 50 - 658 = 42, casing 42) - show it as a check; if they don't match, something
-  is wrong. Then BLEED the trapped pressure through the choke in small increments to 0, do the
-  0 +/-10 psi dead-well check and a FLOW CHECK. Pressure building back = well not dead.
-- Driller's 1st circ: hold DP at ICP + SF until the gas is out; casing rises as gas comes up,
-  peaks with gas at surface, then falls to SIDPP + SF. 2nd circ: casing held at SIDPP + SF
-  until KWM at the bit, then DP held at FCP + SF until KWM at surface.
+  at SIDPP + SF. At final shut-in BOTH gauges must read the same trapped pressure - show it as
+  a check; if they don't match, something is wrong. Then (always in the step list, user rule
+  v1.1): "if any pressure on either gauge, bleed through the choke in small increments; record
+  volume bled; more than a few gallons or pressure building back = well not dead", the
+  0 +/-10 psi dead-well check and a FLOW CHECK (`kill_steps.final_shut_in_steps`).
+- SF is a REQUIRED input (no default). SF 0 tests are the regression baseline; hand examples
+  use SF 50.
+- KWM rounded UP overbalances by more than SIDPP: OB = (KMW - OMW) x 0.052 x TVD (academic,
+  `formulas.kill_mud_overbalance`; baseline 658 vs SIDPP 650). TRAPPED PRESSURE IS
+  METHOD-SPECIFIC, clamped >= 0 (user-approved v1.1):
+  - Driller's: SIDPP + SF - OB (baseline 42; SF 0 -> 0).
+  - W&W: SF + (FCP used - actual friction with kill mud) (baseline 50 = SF; high-ICP case:
+    retaken SIDPP 680, reading 1,470, SF 50 -> friction 818, trapped 61).
+- Driller's 1st circ: hold DP at ICP + SF until the gas is out (check: both gauges read
+  SIDPP + SF); casing rises as gas comes up, peaks with gas at surface, then falls to
+  SIDPP + SF. 2nd circ: casing held at SIDPP + SF until KWM at the bit, then DP held at its
+  reading with KWM at the bit = FCP + SIDPP + SF - OB (baseline 871, NOT FCP + SF = 879;
+  SF 0 -> 821; horizontal wells OB 697 -> 804 at SF 0, 854 at SF 50) until KWM at surface.
+  If SIDPP + SF < OB the step note says: "If casing reaches 0 with the choke fully open, drill
+  pipe will rise toward FCP (829 here). Expected; BHP ends slightly over formation pressure.
+  Continue to surface."
 - W&W (engineer's method): from the first stroke KWM goes down the DP while influx + OMW come
-  up the annulus. Casing held + SF on start-up/shut-down; at rate, DP follows the step-down
-  chart (+ SF) until KWM is at the bit, then FCP + SF until KWM is at surface.
+  up the annulus. Casing held + SF on start-up/shut-down; ICP check vs ICP + SF (high: actual
+  SCR = reading - SF - retaken SIDPP); at rate, DP follows the step-down chart (+ SF) until
+  KWM is at the bit, then FCP + SF until KWM is at surface.
+- Scope: surface stack only. Subsea choke line friction is a separate change.
 
 Volumetric / L&B plot (user): x-axis = bbl bled / pumped; casing = hold pressures.
 - Pipe on bottom, NO float: DP readable -> the sheet says "DP readable - use drill pipe
@@ -374,9 +398,11 @@ Volumetric / L&B plot (user): x-axis = bbl bled / pumped; casing = hold pressure
 DONE: `kill_plot.py` + `tests/test_kill_plot.py` - Driller's and W&W, VERTICAL wells only
 (untapered/tapered). Tests: pressures exact, stroke of each maximum within a window
 (+/-30 for the W&W shoe plateau) - exact-stroke asserts break on harmless rounding.
-NEXT, in this order (user): (1) SF / trapped-pressure bleed / flow check in the Driller's and
-W&W step lists, (2) the web page, (3) deviated/horizontal with a hand example first,
-(4) the volumetric plot.
+DONE: SF / trapped-pressure bleed / flow check in the Driller's and W&W step lists, plus the
+kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/50, 821/0,
+829/0, SF < OB clamp, high-ICP W&W 61).
+NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
+first, (3) the volumetric plot.
 
 ## Git / GitHub
 

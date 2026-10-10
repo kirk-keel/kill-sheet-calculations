@@ -16,6 +16,7 @@ from killsheet.drillers import drillers_method
 from killsheet.formulas import (
     final_circulating_pressure,
     initial_circulating_pressure,
+    kill_mud_overbalance,
     kill_mud_weight,
     maasp,
     max_allowable_mud_weight,
@@ -44,6 +45,7 @@ from killsheet.volumetric import (
 from killsheet.wait_and_weight import (
     ICP_MATCHES,
     ICP_RECALCULATED,
+    actual_scr_pressure,
     kill_pressures_at_kill_rate,
     wait_and_weight_method,
 )
@@ -75,6 +77,7 @@ def print_kill_sheet(
     sidpp_psi,
     sicp_psi,
     scr_pressure_psi,
+    safety_margin_psi,
     pump_output_bbl_per_stk,
     drill_string,
     open_hole_annulus,
@@ -95,12 +98,14 @@ def print_kill_sheet(
     Deviated or horizontal well: give the bit and shoe MD, and key points
     such as KOP, end of build and the heel as (name, MD, TVD).
 
+    safety_margin_psi: SF held on bottom for the whole kill, chosen by the team.
+
     Wait and Weight only:
       sidpp_at_start_psi - SIDPP retaken (float bumped) just before pump start-up
                            (defaults to sidpp_psi)
       sicp_at_start_psi  - SICP retaken just before pump start-up (defaults to sicp_psi)
-      observed_icp_psi   - drill pipe reading once at kill rate; if it reads more than
-                           10 psi HIGH, ICP/FCP are recalculated (FCP never lower)
+      observed_icp_psi   - drill pipe reading once at kill rate (ICP + SF); if it reads
+                           more than 10 psi HIGH, ICP/FCP are recalculated (FCP never lower)
     """
     bit_md_ft = bit_tvd_ft if bit_md_ft is None else bit_md_ft
     shoe_md_ft = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
@@ -163,35 +168,44 @@ def print_kill_sheet(
         print(f"  {name:<40}{md_ft:>9,} {tvd_ft:>9,} {stks:>9,}")
     print()
 
+    sf = safety_margin_psi
+    print(f"Safety margin (SF)           {sf:>8,} psi")
+    print()
+
     if method == DRILLERS:
         print(DRILLERS)
-        print_steps(drillers_method(sidpp_psi, sicp_psi, icp, fcp, stb, btsurf))
+        overbalance = kill_mud_overbalance(kmw, original_mud_weight_ppg, bit_tvd_ft)
+        print_steps(drillers_method(sidpp_psi, sicp_psi, icp, fcp, stb, btsurf, sf, overbalance))
     elif method == WAIT_AND_WEIGHT:
         print(WAIT_AND_WEIGHT)
         sidpp_at_start = sidpp_psi if sidpp_at_start_psi is None else sidpp_at_start_psi
         sicp_at_start = sicp_psi if sicp_at_start_psi is None else sicp_at_start_psi
+        friction = None
         if observed_icp_psi is not None:
-            print(f"  ICP check at kill rate: calculated {icp:,} psi, drill pipe reads {observed_icp_psi:,} psi")
+            print(f"  ICP check at kill rate: ICP + SF {icp + sf:,} psi, drill pipe reads {observed_icp_psi:,} psi")
             icp, fcp, status = kill_pressures_at_kill_rate(
-                icp, fcp, observed_icp_psi, sidpp_at_start, kmw, original_mud_weight_ppg
+                icp, fcp, observed_icp_psi, sidpp_at_start, kmw, original_mud_weight_ppg, sf
             )
             if status == ICP_MATCHES:
                 print("  within +/-10 psi - use the calculated ICP and FCP")
             elif status == ICP_RECALCULATED:
                 print(f"  more than 10 psi high - RECALCULATED from retaken SIDPP {sidpp_at_start:,} psi: "
                       f"ICP {icp:,} psi, FCP {fcp:,} psi (FCP is never lower than calculated)")
+                friction = final_circulating_pressure(
+                    actual_scr_pressure(observed_icp_psi, sidpp_at_start, sf), kmw, original_mud_weight_ppg)
             else:
                 print("  more than 10 psi low - a complication; calculated ICP and FCP are kept "
                       "(never recalculated lower)")
-        print_steps(wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf))
+        print_steps(wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf, sf, friction))
         print()
         print(f"  Drill pipe step-down schedule ({step_method}) - pressure follows where the kill mud is")
-        print("    Strokes    Kill mud MD ft   TVD ft      psi")
+        print("    Strokes    Kill mud MD ft   TVD ft      psi   psi + SF")
         schedule = pressure_schedule(icp, fcp, string, pump, surface_line_volume_bbl, step_method,
                                      sidpp_psi=sidpp_at_start, bit_tvd_ft=bit_tvd_ft, key_points=key_points)
         for row in schedule:
             label = "" if row.label == STEP else f"   <- {row.label}"
-            print(f"    {row.strokes:>7,}  {row.md_ft:>15,}  {row.tvd_ft:>7,}  {row.pressure_psi:>7,}{label}")
+            print(f"    {row.strokes:>7,}  {row.md_ft:>15,}  {row.tvd_ft:>7,}  {row.pressure_psi:>7,}"
+                  f"  {row.pressure_psi + sf:>8,}{label}")
     else:
         raise ValueError(f"method must be {DRILLERS!r} or {WAIT_AND_WEIGHT!r}")
 

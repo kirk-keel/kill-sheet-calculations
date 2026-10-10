@@ -6,7 +6,7 @@ Driller's method kill sheet for this well (tests/test_tapered_well.py).
 Verified by a well control specialist before this test was written.
 """
 
-from killsheet.kill_steps import CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
+from killsheet.kill_steps import BLEED, CHECK, FLOW_CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
 from killsheet.schedule import BIT, CROSSOVER, drill_pipe_pressure, pressure_schedule
 from killsheet.strokes import bit_to_surface_strokes, surface_to_bit_strokes
 from killsheet.wait_and_weight import wait_and_weight_method
@@ -23,14 +23,18 @@ def test_strokes():
 
 
 def test_wait_and_weight_steps():
-    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, 1326, 1796)
+    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, 1326, 1796, 0)   # SF 0
     assert [(s.stage, s.gauge, s.hold_psi, s.strokes) for s in steps] == [
         (WEIGHT_UP, "pits", None, None),
         (START_UP, "casing", 800, None),
+        (CHECK, "drill pipe", 1400, None),           # ICP check at kill rate
         (HOLD, "drill pipe", 1400, 1326),           # step down ICP -> FCP, surface to bit
         (HOLD, "drill pipe", 829, 1796),            # hold FCP, bit to surface
         (SHUT_DOWN, "casing", None, None),
-        (CHECK, "drill pipe and casing", 0, None),
+        (CHECK, "drill pipe and casing", 0, None),   # trapped pressure = SF = 0
+        (BLEED, "choke", None, None),
+        (CHECK, "drill pipe and casing", 0, None),   # well dead
+        (FLOW_CHECK, "well", None, None),
     ]
     # 1,326 + 1,796 = 3,122 strokes (Driller's method on the same well: 1,796 + 1,326 + 1,796 = 4,918)
     assert sum(s.strokes for s in steps if s.strokes) == 3122

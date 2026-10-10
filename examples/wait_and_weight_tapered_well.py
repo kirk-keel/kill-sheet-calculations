@@ -25,6 +25,7 @@ print_kill_sheet(
     sidpp_psi=650,
     sicp_psi=800,
     scr_pressure_psi=750,               # at 30 spm
+    safety_margin_psi=50,               # held on bottom, chosen by the team
     # Wait and Weight: retake SIDPP (bump the float) and SICP just before
     # start-up, and the drill pipe reading once at kill rate
     # (leave observed_icp_psi as None until you have it)

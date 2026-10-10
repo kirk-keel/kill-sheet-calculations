@@ -28,6 +28,7 @@ print_kill_sheet(
     sidpp_psi=650,
     sicp_psi=800,
     scr_pressure_psi=750,               # at 30 spm
+    safety_margin_psi=50,               # held on bottom, chosen by the team
     # Pump and volumes: (name, capacity bbl/ft, length ft MD)
     pump_output_bbl_per_stk=0.117,
     surface_line_volume_bbl=0,          # leave as 0 if unknown

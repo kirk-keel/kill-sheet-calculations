@@ -3,17 +3,23 @@
 Baseline example well: KMW 11.5 ppg, SIDPP 650 psi, SICP 800 psi,
 ICP 1,400 psi, FCP 829 psi, surface-to-bit 1,627 strokes,
 bit-to-surface 4,557 strokes.
+
+SF 0 is the regression baseline (the values before the safety margin).
+SF 50 is the hand-worked example approved by the well control specialist.
 """
 
 import pytest
 
-from killsheet.kill_steps import CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
+from killsheet.kill_steps import BLEED, CHECK, FLOW_CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
+from killsheet.formulas import final_circulating_pressure
 from killsheet.schedule import BIT, CROSSOVER, STEP, pressure_schedule
 from killsheet.wait_and_weight import (
     ICP_MATCHES,
     ICP_READS_LOW,
     ICP_RECALCULATED,
+    actual_scr_pressure,
     kill_pressures_at_kill_rate,
+    trapped_pressure,
     wait_and_weight_method,
 )
 
@@ -26,42 +32,126 @@ SURFACE_TO_BIT_STROKES = 1627
 BIT_TO_SURFACE_STROKES = 4557
 
 
-def test_wait_and_weight_steps():
-    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, SURFACE_TO_BIT_STROKES, BIT_TO_SURFACE_STROKES)
+def kill_steps(sicp_at_start_psi=800, safety_margin_psi=0, icp_psi=ICP_PSI, kill_mud_friction_psi=None):
+    return wait_and_weight_method(sicp_at_start_psi, icp_psi, FCP_PSI, KMW_PPG, SURFACE_TO_BIT_STROKES,
+                                  BIT_TO_SURFACE_STROKES, safety_margin_psi, kill_mud_friction_psi)
+
+
+def stages(steps):
     # (stage, gauge, hold psi, strokes) - None means "hold constant" / not stroke-based
-    assert [(s.stage, s.gauge, s.hold_psi, s.strokes) for s in steps] == [
+    return [(s.stage, s.gauge, s.hold_psi, s.strokes) for s in steps]
+
+
+def test_trapped_pressure():
+    # SF + (FCP used - actual friction with kill mud), never below 0
+    assert trapped_pressure(50, 829, 829) == 50      # the step-down ends on FCP + SF: trapped = SF
+    assert trapped_pressure(0, 829, 829) == 0
+    assert trapped_pressure(50, 829, 818) == 61      # high ICP, FCP kept at the calculated 829
+    assert trapped_pressure(0, 829, 840) == 0        # a gauge can't read below 0
+
+
+def test_wait_and_weight_steps_sf_0():
+    assert stages(kill_steps(safety_margin_psi=0)) == [
         (WEIGHT_UP, "pits", None, None),                # weight up to KMW, retake SIDPP and SICP
         (START_UP, "casing", 800, None),                # hold casing at the retaken SICP
+        (CHECK, "drill pipe", 1400, None),              # ICP check at kill rate
         (HOLD, "drill pipe", 1400, 1627),               # step down ICP -> FCP, surface to bit
         (HOLD, "drill pipe", 829, 4557),                # hold FCP, bit to surface
         (SHUT_DOWN, "casing", None, None),              # hold casing constant
+        (CHECK, "drill pipe and casing", 0, None),      # trapped = SF = 0
+        (BLEED, "choke", None, None),                   # if any pressure, bleed it off
         (CHECK, "drill pipe and casing", 0, None),      # both read 0 - well dead
+        (FLOW_CHECK, "well", None, None),
+    ]
+
+
+def test_wait_and_weight_steps_sf_50():
+    # The hand-worked example approved by the well control specialist.
+    assert stages(kill_steps(safety_margin_psi=50)) == [
+        (WEIGHT_UP, "pits", None, None),
+        (START_UP, "casing", 850, None),                # retaken SICP + SF
+        (CHECK, "drill pipe", 1450, None),              # ICP + SF
+        (HOLD, "drill pipe", 1450, 1627),               # step-down + SF, 1,450 -> 879
+        (HOLD, "drill pipe", 879, 4557),                # FCP + SF
+        (SHUT_DOWN, "casing", None, None),              # expect 50
+        (CHECK, "drill pipe and casing", 50, None),     # trapped = SF (NOT 42 as in Driller's)
+        (BLEED, "choke", None, None),
+        (CHECK, "drill pipe and casing", 0, None),      # well dead
+        (FLOW_CHECK, "well", None, None),
+    ]
+
+
+def test_step_down_note_runs_from_icp_plus_sf_to_fcp_plus_sf():
+    assert "from 1,450 to 879 psi" in kill_steps(safety_margin_psi=50)[3].note
+
+
+def test_high_icp_recalculated_trapped_pressure_is_more_than_sf():
+    # SF 50, SIDPP retaken at 680, drill pipe reads 1,470 at kill rate (ICP + SF = 1,450):
+    #   actual SCR = 1,470 - 50 - 680 = 740; friction with kill mud = 740 x 11.5 / 10.4 = 818
+    #   ICP = 1,470 - 50 = 1,420; FCP stays 829 (never lower than calculated)
+    #   trapped = 50 + (829 - 818) = 61
+    icp, fcp, status = at_kill_rate(1470, sidpp_at_start_psi=680, safety_margin_psi=50)
+    assert (icp, fcp, status) == (1420, 829, ICP_RECALCULATED)
+    friction = final_circulating_pressure(actual_scr_pressure(1470, 680, 50), KMW_PPG, ORIGINAL_MUD_WEIGHT_PPG)
+    assert friction == 818
+    steps = kill_steps(sicp_at_start_psi=830, safety_margin_psi=50, icp_psi=icp, kill_mud_friction_psi=friction)
+    assert stages(steps) == [
+        (WEIGHT_UP, "pits", None, None),
+        (START_UP, "casing", 880, None),                # retaken SICP 830 + SF
+        (CHECK, "drill pipe", 1470, None),              # recalculated ICP + SF = the reading
+        (HOLD, "drill pipe", 1470, 1627),
+        (HOLD, "drill pipe", 879, 4557),                # FCP + SF
+        (SHUT_DOWN, "casing", None, None),
+        (CHECK, "drill pipe and casing", 61, None),     # 50 + 829 - 818
+        (BLEED, "choke", None, None),
+        (CHECK, "drill pipe and casing", 0, None),
+        (FLOW_CHECK, "well", None, None),
     ]
 
 
 def test_weight_up_step_names_the_kill_mud_weight():
-    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, SURFACE_TO_BIT_STROKES, BIT_TO_SURFACE_STROKES)
+    steps = kill_steps()
     assert "11.5 ppg" in steps[0].note
     assert "retake SIDPP (bump the float) and SICP" in steps[0].note
 
 
 def test_start_up_uses_the_retaken_sicp():
     # Gas migrated while weighting up: SICP retaken at 830 psi before start-up.
-    steps = wait_and_weight_method(830, ICP_PSI, FCP_PSI, KMW_PPG, SURFACE_TO_BIT_STROKES, BIT_TO_SURFACE_STROKES)
+    steps = kill_steps(sicp_at_start_psi=830)
     assert (steps[1].stage, steps[1].gauge, steps[1].hold_psi) == (START_UP, "casing", 830)
 
 
 def test_total_strokes_for_the_kill():
     # 1,627 + 4,557 = 6,184 strokes (Driller's method on the same well: 10,741)
-    steps = wait_and_weight_method(800, ICP_PSI, FCP_PSI, KMW_PPG, SURFACE_TO_BIT_STROKES, BIT_TO_SURFACE_STROKES)
-    assert sum(s.strokes for s in steps if s.strokes) == 6184
+    assert sum(s.strokes for s in kill_steps() if s.strokes) == 6184
 
 
-def at_kill_rate(observed_icp_psi, sidpp_at_start_psi=SIDPP_PSI):
+def at_kill_rate(observed_icp_psi, sidpp_at_start_psi=SIDPP_PSI, safety_margin_psi=0):
     """ICP check for the baseline well: calculated ICP 1,400, FCP 829."""
     return kill_pressures_at_kill_rate(
-        ICP_PSI, FCP_PSI, observed_icp_psi, sidpp_at_start_psi, KMW_PPG, ORIGINAL_MUD_WEIGHT_PPG
+        ICP_PSI, FCP_PSI, observed_icp_psi, sidpp_at_start_psi, KMW_PPG, ORIGINAL_MUD_WEIGHT_PPG,
+        safety_margin_psi,
     )
+
+
+@pytest.mark.parametrize(
+    "observed_icp_psi, expected",
+    [
+        (1450, (1400, 829, ICP_MATCHES)),           # ICP + SF exactly
+        (1460, (1400, 829, ICP_MATCHES)),           # within +/- 10 of ICP + SF
+        (1439, (1400, 829, ICP_READS_LOW)),         # 11 psi low: a complication
+        (1400, (1400, 829, ICP_READS_LOW)),         # reading ICP means the SF was not held
+        # 1,500: actual SCR = 1,500 - 50 - 650 = 800 -> FCP 884.6 -> 885; ICP = 1,450
+        (1500, (1450, 885, ICP_RECALCULATED)),
+    ],
+)
+def test_icp_check_compares_with_icp_plus_sf(observed_icp_psi, expected):
+    assert at_kill_rate(observed_icp_psi, safety_margin_psi=50) == expected
+
+
+def test_actual_scr_pressure():
+    assert actual_scr_pressure(1500, 650, 50) == 800      # observed - SF - retaken SIDPP
+    assert actual_scr_pressure(1450, 650, 0) == 800
 
 
 @pytest.mark.parametrize("observed_icp_psi", [1400, 1405, 1410, 1390])

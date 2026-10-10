@@ -11,7 +11,7 @@ The pressure bottoms out at the heel and climbs back to FCP along the lateral.
 Verified by a well control specialist before this test was written.
 """
 
-from killsheet.kill_steps import CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
+from killsheet.kill_steps import BLEED, CHECK, FLOW_CHECK, HOLD, SHUT_DOWN, START_UP, WEIGHT_UP
 from killsheet.schedule import BIT, CROSSOVER, STEP, drill_pipe_pressure, pressure_schedule
 from killsheet.wait_and_weight import wait_and_weight_method
 
@@ -28,14 +28,18 @@ def schedule():
 
 def test_wait_and_weight_steps():
     # Same strokes as the approved Driller's method kill sheet: 1,948 to the bit, 6,303 bit to surface
-    steps = wait_and_weight_method(700, ICP_PSI, FCP_PSI, KMW_PPG, 1948, 6303)
+    steps = wait_and_weight_method(700, ICP_PSI, FCP_PSI, KMW_PPG, 1948, 6303, 0)   # SF 0
     assert [(s.stage, s.gauge, s.hold_psi, s.strokes) for s in steps] == [
         (WEIGHT_UP, "pits", None, None),
         (START_UP, "casing", 700, None),
+        (CHECK, "drill pipe", 1400, None),           # ICP check at kill rate
         (HOLD, "drill pipe", 1400, 1948),
         (HOLD, "drill pipe", 851, 6303),
         (SHUT_DOWN, "casing", None, None),
-        (CHECK, "drill pipe and casing", 0, None),
+        (CHECK, "drill pipe and casing", 0, None),   # trapped pressure = SF = 0
+        (BLEED, "choke", None, None),
+        (CHECK, "drill pipe and casing", 0, None),   # well dead
+        (FLOW_CHECK, "well", None, None),
     ]
 
 

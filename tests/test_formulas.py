@@ -9,6 +9,7 @@ import pytest
 from killsheet.formulas import (
     final_circulating_pressure,
     initial_circulating_pressure,
+    kill_mud_overbalance,
     kill_mud_weight,
     maasp,
     max_allowable_mud_weight,
@@ -88,3 +89,14 @@ def test_kill_mud_weight_rejects_zero_or_negative_sidpp(sidpp_psi):
     # the float must be bumped first.
     with pytest.raises(ValueError, match="bump the float"):
         kill_mud_weight(sidpp_psi, 10_000, 10.0)
+
+
+def test_kill_mud_overbalance():
+    # (11.5 - 10.4) x 0.052 x 11,500 = 657.8 -> 658, 8 psi more than SIDPP 650:
+    # KMW is rounded UP, so a full column of kill mud overbalances SIDPP.
+    assert kill_mud_overbalance(11.5, ORIGINAL_MUD_WEIGHT_PPG, TVD_FT) == 658
+
+
+def test_kill_mud_overbalance_horizontal_well():
+    # KMW 11.706 -> 11.8: (11.8 - 10.4) x 0.052 x 9,573 = 696.9 -> 697 (47 psi over SIDPP)
+    assert kill_mud_overbalance(11.8, ORIGINAL_MUD_WEIGHT_PPG, 9_573) == 697

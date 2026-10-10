@@ -79,3 +79,15 @@ def maasp(max_allowable_mud_weight_ppg, current_mud_weight_ppg, shoe_tvd_ft):
     """
     raw_maasp = (max_allowable_mud_weight_ppg - current_mud_weight_ppg) * PSI_PER_FT_PER_PPG * shoe_tvd_ft
     return round_down_to_whole_number(raw_maasp)
+
+
+def kill_mud_overbalance(kill_mud_weight_ppg, original_mud_weight_ppg, tvd_ft):
+    """Extra hydrostatic (psi) of a full column of kill mud, whole psi.
+
+        Overbalance = (KMW - OMW) x 0.052 x TVD
+
+    Because KMW is rounded UP, this is a little MORE than SIDPP
+    (baseline well: 1.1 x 0.052 x 11,500 = 657.8 -> 658 psi vs SIDPP 650).
+    """
+    return round_to_whole_number(
+        (kill_mud_weight_ppg - original_mud_weight_ppg) * PSI_PER_FT_PER_PPG * tvd_ft)

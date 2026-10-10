@@ -152,6 +152,20 @@ TVD at any MD is interpolated in a straight line between the key points either s
 tangent and horizontal sections. In a build section it's an estimate, so add key
 points through the build for a closer answer. Depths are rounded to a whole foot.
 
+### Safety margin, trapped pressure, bleed-off and flow check
+
+Every kill holds a **safety margin (SF)** on bottom, chosen by the team. On start-up the
+casing is held at SICP + SF, so the drill pipe reads ICP + SF at kill rate, and the SF is
+carried through the whole kill. At the final shut-in both gauges must read the same
+**trapped pressure** (if they don't, something is wrong). Then: if there is any pressure
+on either gauge, bleed it off through the choke in small increments, shutting in between,
+and record the volume bled. More than a few gallons, or pressure building back, means the
+well is not dead. Then check both gauges read 0 psi (±10) and **flow check**.
+
+Kill mud is rounded UP, so a full column of it adds a little **more** than SIDPP:
+on the baseline well (11.5 - 10.4) x 0.052 x 11,500 = 658 psi, 8 psi more than SIDPP 650.
+That is why the trapped pressure isn't simply the SF, and why it differs by method.
+
 ### Driller's method
 
 A constant bottomhole pressure kill in two circulations. Both circulations use the
@@ -161,15 +175,21 @@ only tell the truth if that procedure is followed.
 
 | Circulation | Mud | Hold | For |
 |---|---|---|---|
-| 1st | Original | Drill pipe at **ICP** | **Minimum** one bottoms up, until the gas is out |
-| 2nd | Kill | Casing **constant** (at the SIDPP value) | Surface-to-bit strokes |
-| 2nd | Kill | Drill pipe at **FCP** | Bit-to-surface strokes |
+| 1st | Original | Casing at **SICP + SF** on start-up, then drill pipe at **ICP + SF** | **Minimum** one bottoms up, until the gas is out |
+| 2nd | Kill | Casing **constant** at **SIDPP + SF** | Surface-to-bit strokes |
+| 2nd | Kill | Drill pipe at its **reading with kill mud at the bit** = FCP + SIDPP + SF - kill mud overbalance (871 psi on the baseline, not FCP + SF = 879) | Bit-to-surface strokes |
 
 **Shut-in checks** (gauges within ±10 psi):
 
-- After the 1st circulation, SIDPP and SICP must both read the **original SIDPP**.
+- After the 1st circulation, SIDPP and SICP must both read **SIDPP + SF**.
   If SICP is higher, strung-out gas is still in the annulus, so continue circulating.
-- After the 2nd circulation, SIDPP and SICP must both read **0 psi**. The well is dead.
+- After the 2nd circulation, both read the **trapped pressure** = SIDPP + SF - kill mud
+  overbalance (650 + 50 - 658 = 42 psi), never below 0. Bleed it off, check 0 psi
+  (the well is dead), flow check.
+
+If the SF is smaller than the kill mud's extra overbalance (SF 0 on the baseline), the
+casing reaches 0 with the choke fully open before kill mud reaches surface, and the drill
+pipe rises toward FCP. That is expected: BHP ends slightly over formation pressure.
 
 ### Wait and Weight
 
@@ -178,11 +198,16 @@ One circulation, with kill mud. Same start-up and shut-down as the Driller's met
 | Stage | Gauge | Hold | For |
 |---|---|---|---|
 | Weight up | Pits | Weight up the active system to KMW; **retake SIDPP (bump the float) and SICP** just before start-up (gas may have migrated) | — |
-| Start-up | Casing | Constant at the **retaken SICP** while bringing the pump to kill rate | — |
-| ICP check | Drill pipe | Must read ICP ±10 psi. More than 10 psi **high**: **recalculate** ICP, FCP and the schedule from the reading; FCP is **never lower** than calculated. More than 10 psi **low**: a complication, so the calculated values are kept | — |
-| Hold | Drill pipe | **Step-down schedule** from ICP to FCP, following the depth of the kill mud | Surface-to-bit strokes |
-| Hold | Drill pipe | **FCP** | Bit-to-surface strokes |
-| Shut-down / check | Both | Both read **0 psi** (±10 psi): the well is dead | — |
+| Start-up | Casing | Constant at the **retaken SICP + SF** while bringing the pump to kill rate | — |
+| ICP check | Drill pipe | Must read **ICP + SF** ±10 psi. More than 10 psi **high**: **recalculate** ICP, FCP and the schedule from the reading (actual SCR = reading - SF - retaken SIDPP); FCP is **never lower** than calculated. More than 10 psi **low**: a complication, so the calculated values are kept | — |
+| Hold | Drill pipe | **Step-down schedule + SF** from ICP + SF to FCP + SF, following the depth of the kill mud | Surface-to-bit strokes |
+| Hold | Drill pipe | **FCP + SF** | Bit-to-surface strokes |
+| Shut-down / check | Both | Both read the **trapped pressure** = SF (50 psi on the baseline). Bleed it off, check **0 psi** (±10 psi): the well is dead. Flow check | — |
+
+The step-down chart takes off SIDPP, but the kill mud adds the full overbalance (8 psi
+more on the baseline), so BHP ends 8 psi above formation pressure + SF and the trapped
+pressure is the SF itself. After a high-ICP recalculation that kept the calculated FCP,
+the trapped pressure is SF + (FCP - actual friction with kill mud).
 
 **Why the schedule follows depth, not strokes.** The drill pipe pressure comes down
 because the kill mud adds hydrostatic, and hydrostatic depends on how *deep* the kill
@@ -376,27 +401,35 @@ Annulus, bit up                              MD ft    TVD ft   Strokes
   shoe / top of DP x 8-1/2" hole              5,150     5,150     2,405
   surface                                         0         0     4,557
 
+Safety margin (SF)                 50 psi
+
 Driller's method
   1st circulation (original mud)
-    start-up   casing 800 psi
-               bring pump to kill rate holding casing pressure constant
-    hold       drill pipe 1,400 psi for 4,557 stks
-               minimum - one bottoms up; continue until the gas is out
+    start-up   casing 850 psi
+               bring pump to kill rate holding casing pressure constant at SICP + SF
+    hold       drill pipe 1,450 psi for 4,557 stks
+               ICP + SF; minimum - one bottoms up; continue until the gas is out
     shut-down  casing
                slow pump to 0 holding casing pressure constant
-    check      drill pipe and casing 650 psi
-               both must read the original SIDPP (+/-10 psi); if SICP is higher, gas is still in the annulus - continue circulating
+    check      drill pipe and casing 700 psi
+               both must read SIDPP + SF (+/-10 psi); if SICP is higher, gas is still in the annulus - continue circulating
   2nd circulation (kill mud)
-    start-up   casing 650 psi
-               bring pump to kill rate holding casing pressure constant
-    hold       casing 650 psi for 1,627 stks
-               kill mud surface to bit
-    hold       drill pipe 829 psi for 4,557 stks
-               kill mud bit to surface
+    start-up   casing 700 psi
+               bring pump to kill rate holding casing pressure constant at SIDPP + SF
+    hold       casing 700 psi for 1,627 stks
+               kill mud surface to bit; drill pipe falls from 1,450 to 871 psi
+    hold       drill pipe 871 psi for 4,557 stks
+               kill mud bit to surface - hold the drill pipe reading with kill mud at the bit
     shut-down  casing
-               slow pump to 0 holding casing pressure constant
+               slow pump to 0 holding casing pressure constant (expect 42 psi)
+    check      drill pipe and casing 42 psi
+               both must read the same trapped pressure (+/-10 psi); if they don't match, something is wrong
+    bleed      choke
+               if any pressure on either gauge, bleed in small increments through the choke, shutting in between; record volume bled; more than a few gallons or pressure building back = well not dead
     check      drill pipe and casing 0 psi
                both must read 0 psi (+/-10 psi) - the well is dead
+    flow check well
+               flow check before opening the well
 ```
 
 Deviated well, from `python examples/deviated_well.py` (Driller's steps omitted here).
@@ -440,32 +473,40 @@ Wait and Weight
   kill circulation (kill mud)
     weight up  pits
                weight up the active system to 11.5 ppg; retake SIDPP (bump the float) and SICP just before pump start-up
-    start-up   casing 800 psi
-               bring pump to kill rate holding casing pressure constant at the retaken SICP
-    hold       drill pipe 1,400 psi for 1,627 stks
-               follow the step-down schedule from ICP 1,400 to FCP 829 psi - kill mud surface to bit
-    hold       drill pipe 829 psi for 4,557 stks
-               hold FCP - kill mud bit to surface
+    start-up   casing 850 psi
+               bring pump to kill rate holding casing pressure constant at the retaken SICP + SF
+    check      drill pipe 1,450 psi
+               at kill rate the drill pipe must read ICP + SF (+/-10 psi); if high, recalculate (FCP never lower); if low, a complication
+    hold       drill pipe 1,450 psi for 1,627 stks
+               follow the step-down schedule + SF from 1,450 to 879 psi - kill mud surface to bit
+    hold       drill pipe 879 psi for 4,557 stks
+               hold FCP + SF - kill mud bit to surface
     shut-down  casing
-               slow pump to 0 holding casing pressure constant
+               slow pump to 0 holding casing pressure constant (expect 50 psi)
+    check      drill pipe and casing 50 psi
+               both must read the same trapped pressure (+/-10 psi); if they don't match, something is wrong
+    bleed      choke
+               if any pressure on either gauge, bleed in small increments through the choke, shutting in between; record volume bled; more than a few gallons or pressure building back = well not dead
     check      drill pipe and casing 0 psi
                both must read 0 psi (+/-10 psi) - the well is dead
+    flow check well
+               flow check before opening the well
 
   Drill pipe step-down schedule (10 steps) - pressure follows where the kill mud is
-    Strokes    Kill mud MD ft   TVD ft      psi
-          0                0        0    1,400
-        163            1,073    1,073    1,347
-        326            2,140    2,140    1,294
-        489            3,213    3,213    1,241
-        652            4,287    4,287    1,188
-        815            5,360    5,360    1,134
-        978            6,427    6,427    1,081
-      1,141            7,500    7,500    1,028
-      1,304            8,573    8,573      975
-      1,467            9,640    9,640      922
-      1,521           10,000   10,000      904   <- crossover
-      1,588           10,900   10,900      859   <- crossover
-      1,627           11,500   11,500      829   <- bit
+    Strokes    Kill mud MD ft   TVD ft      psi   psi + SF
+          0                0        0    1,400     1,450
+        163            1,073    1,073    1,347     1,397
+        326            2,140    2,140    1,294     1,344
+        489            3,213    3,213    1,241     1,291
+        652            4,287    4,287    1,188     1,238
+        815            5,360    5,360    1,134     1,184
+        978            6,427    6,427    1,081     1,131
+      1,141            7,500    7,500    1,028     1,078
+      1,304            8,573    8,573      975     1,025
+      1,467            9,640    9,640      922       972
+      1,521           10,000   10,000      904       954   <- crossover
+      1,588           10,900   10,900      859       909   <- crossover
+      1,627           11,500   11,500      829       879   <- bit
 ```
 
 Volumetric method and lubricate and bleed, from `python examples/volumetric_pipe_on_bottom_well.py`:
@@ -634,6 +675,7 @@ src/killsheet/
   lubricate_and_bleed.py  lubricate and bleed cycles
   bullhead.py    bullheading while drilling: limits for each side, equipment limit, chart
   reverse_circulation.py  reverse circulation kill for CWI wells
+  kill_plot.py   kill plot: forecast drill pipe and casing pressure (single-bubble gas model)
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/

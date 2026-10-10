@@ -9,13 +9,18 @@ pump 0.117 bbl/stk, pit gain 10 bbl, safety margin (SF) 50 psi.
   Gas gradient    = 0.5408 - 150 / 344 = 0.5408 - 0.4360 = 0.1048 psi/ft
   Formation       = 650 + 0.5408 x 11,500 = 6,869 psi;  BHP = 6,869 + 50 = 6,919 psi
   Fracture (shoe) = 0.052 x 14.6 x 5,150 = 3,909 psi (rounded DOWN)
-  Trapped         = 650 + 50 - (0.5980 - 0.5408) x 11,500 = 42 psi
+  Overbalance     = (11.5 - 10.4) x 0.052 x 11,500 = 657.8 -> 658 psi (8 more than SIDPP)
+  Driller's       = DP with kill mud at the bit 829 + 650 + 50 - 658 = 871 (held to surface);
+                    trapped = 650 + 50 - 658 = 42 psi
+  W&W             = step-down ends on FCP + SF = 879; the kill mud adds 8 psi more than
+                    the SIDPP the chart takes off, so BHP ends at 6,919 + 8 = 6,927;
+                    trapped = SF = 50 psi
 
 Every pressure matches the hand example. The module rounds the pumped volume
 to 0.1 bbl (as the stroke calculations do), so some events land a stroke or two
-from the hand example. W&W max shoe: 3,640 psi either way, but the shoe
-pressure sits at 3,639-3,640 psi from about 1,600 to 1,629 strokes (a flat
-top), so the stroke it is first reached moves with rounding (hand 1,616).
+from the hand example. W&W max shoe: the shoe pressure sits at 3,647-3,648 psi
+from about 1,600 to 1,631 strokes (a flat top), so the stroke it is first
+reached moves with rounding.
 """
 
 from killsheet.kill_plot import (
@@ -30,7 +35,6 @@ from killsheet.kill_plot import (
     influx_gradient,
     mud_gradient,
     plot_warnings,
-    trapped_pressure,
     trapped_pressures_match,
     wait_and_weight_kill_plot,
 )
@@ -128,19 +132,21 @@ def test_forecast_kill_mud_to_surface_reads_trapped_pressure():
 
 
 def test_forecast_never_reads_below_zero():
-    # No safety margin: kill mud overbalances by 8 psi - the gauge reads 0
-    assert annulus_forecast(4557 + 1627, 6869, ANNULUS_WELL, None, 1627).casing_psi == 0
+    # No safety margin: kill mud overbalances by 8 psi - the gauge reads 0, the
+    # choke is fully open and BHP is the kill mud hydrostatic, 8 psi over formation.
+    forecast = annulus_forecast(4557 + 1627, 6869, ANNULUS_WELL, None, 1627)
+    assert (forecast.casing_psi, forecast.bhp_psi) == (0, 6877)
+    assert forecast.shoe_psi == 3080                        # 0 + 0.5980 x 5,150 (not 8 psi less)
+
+
+def test_forecast_bhp_is_the_bhp_held():
+    assert annulus_forecast(0, 6919, ANNULUS_WELL).bhp_psi == 6919
 
 
 # --- Checks ----------------------------------------------------------------------
 
 def test_fracture_at_shoe():
     assert fracture_at_shoe(14.6, 5_150) == 3909          # 3,909.9 rounded DOWN
-
-
-def test_trapped_pressure():
-    assert trapped_pressure(650, 50, 0.5408, 0.5980, 11_500) == 42
-    assert trapped_pressure(650, 0, 0.5408, 0.5980, 11_500) == 0   # -7.8 reads 0
 
 
 def test_trapped_pressures_match():
@@ -190,13 +196,47 @@ def test_drillers_events_in_the_1st_circulation():
     assert labelled["shut in: both read SIDPP + SF"] == (4557, 700)
 
 
-def test_drillers_2nd_circulation_follows_the_schedule_plus_sf():
-    points = DRILLERS.points
-    schedule = pressure_schedule(1400, 829, DRILL_STRING, 0.117)
-    second = {p.strokes - 4557: p for p in points if 4557 < p.strokes <= 4557 + 1627}
-    for row in schedule[1:]:
-        assert second[row.strokes].drill_pipe_psi == row.pressure_psi + SF_PSI
-        assert second[row.strokes].casing_psi == 700          # held at SIDPP + SF
+def test_drillers_2nd_circulation_drill_pipe_falls_to_871():
+    # Casing held at SIDPP + SF: DP = SIDPP + SF - 658 x MD / 11,500 + 750 + 79 x MD / 11,500
+    # e.g. 1,073 ft: 700 - 61.39 + 750 + 7.37 = 1,395.98 -> 1,396
+    second = [(p.strokes - 4557, p.drill_pipe_psi, p.casing_psi)
+              for p in DRILLERS.points if 4557 < p.strokes <= 4557 + 1627]
+    assert second == [
+        (163, 1396, 700), (326, 1342, 700), (489, 1288, 700), (652, 1234, 700),
+        (815, 1180, 700), (978, 1126, 700), (1141, 1072, 700), (1304, 1018, 700),
+        (1467, 965, 700),
+        (1521, 947, 700),       # DP / HWDP crossover
+        (1588, 901, 700),       # HWDP / DC crossover
+        (1627, 871, 700),       # kill mud at the bit: 829 + 650 + 50 - 658 (NOT 879)
+    ]
+
+
+def test_drillers_drill_pipe_held_at_871_to_surface():
+    bit_to_surface = [p for p in DRILLERS.points if 4557 + 1627 <= p.strokes and p.label != SHUT_IN_TRAPPED]
+    assert {p.drill_pipe_psi for p in bit_to_surface} == {871}
+
+
+def test_drillers_sf_below_overbalance_casing_reaches_0_and_drill_pipe_rises():
+    # SF 0: casing would have to end at 650 - 658 = -8. It reaches 0 (choke fully
+    # open) near the end and the drill pipe rises from 821 toward FCP 829.
+    plot = drillers_kill_plot(**{**WELL, "safety_margin_psi": 0})
+    labelled = {p.label: (p.strokes, p.drill_pipe_psi, p.casing_psi) for p in plot.points}
+    assert labelled["kill mud at the bit"] == (4557 + 1627, 821, 650)
+    choke_open = labelled["casing at 0, choke fully open - drill pipe rises toward FCP"]
+    assert choke_open[1:] == (822, 0)
+    assert abs(choke_open[0] - 10_687) <= 10
+    assert labelled["kill mud at surface"] == (10_741, 829, 0)
+    assert (plot.trapped_drill_pipe_psi, plot.trapped_casing_psi) == (0, 0)
+    after = [p for p in plot.points if p.strokes >= choke_open[0] and p.label != SHUT_IN_TRAPPED]
+    assert all(p.casing_psi == 0 for p in after)
+    assert [p.drill_pipe_psi for p in after] == sorted(p.drill_pipe_psi for p in after)   # only rises
+
+
+def test_drillers_sf_above_overbalance_choke_never_fully_open():
+    assert not any("choke fully open" in p.label for p in DRILLERS.points)
+
+
+SHUT_IN_TRAPPED = "shut in: both read the trapped pressure - bleed to 0, check, flow check"
 
 
 def test_drillers_end_trapped_pressure():
@@ -222,15 +262,15 @@ def test_drillers_warns_shoe_above_fracture():
 
 def test_wait_and_weight_peak_casing():
     peak = WAIT_AND_WEIGHT.peak_casing
-    assert (peak.casing_psi, peak.gas_volume_bbl) == (1044, 65.4)
-    assert abs(peak.strokes - 3998) <= 10
+    assert (peak.casing_psi, peak.gas_volume_bbl) == (1048, 65.1)
+    assert abs(peak.strokes - 4000) <= 10
 
 
 def test_wait_and_weight_max_shoe_is_not_at_top_of_gas_at_shoe():
     # Max as kill mud reaches the bit (casing is about to fall), not when the gas passes the shoe
     plot = WAIT_AND_WEIGHT
-    assert plot.max_shoe.shoe_psi == 3640
-    assert abs(plot.max_shoe.strokes - 1629) <= 30            # a plateau at 3,639-3,640
+    assert plot.max_shoe.shoe_psi == 3648
+    assert abs(plot.max_shoe.strokes - 1618) <= 30            # a plateau at 3,647-3,648
     labelled = {p.label: p.strokes for p in plot.points}
     assert abs(labelled["top of gas at the shoe"] - 2243) <= 10
 
@@ -245,15 +285,32 @@ def test_wait_and_weight_drill_pipe_follows_the_schedule_plus_sf():
 def test_wait_and_weight_casing_line():
     points = WAIT_AND_WEIGHT.points
     labelled = {p.label: (p.strokes, p.drill_pipe_psi, p.casing_psi) for p in points}
-    assert labelled["kill mud at the bit"] == (1627, 879, 854)
-    assert labelled["gas out"] == (4557, 879, 265)
-    assert labelled["kill mud at surface"] == (6184, 879, 42)
+    assert labelled["kill mud at the bit"] == (1627, 879, 862)
+    assert labelled["gas out"] == (4557, 879, 273)
+    assert labelled["kill mud at surface"] == (6184, 879, 50)
 
 
 def test_wait_and_weight_end_trapped_pressure():
     plot = WAIT_AND_WEIGHT
-    assert (plot.trapped_drill_pipe_psi, plot.trapped_casing_psi) == (42, 42)
-    assert plot.warnings == []                                 # peak 1,044 is under MAASP
+    assert (plot.trapped_drill_pipe_psi, plot.trapped_casing_psi) == (50, 50)    # SF, NOT 42
+    assert plot.warnings == []                                 # peak 1,048 is under MAASP
+
+
+def test_wait_and_weight_sf_0_ends_at_0():
+    plot = wait_and_weight_kill_plot(**{**WELL, "safety_margin_psi": 0})
+    labelled = {p.label: (p.strokes, p.drill_pipe_psi, p.casing_psi) for p in plot.points}
+    assert labelled["kill mud at the bit"][1] == 829           # FCP
+    assert labelled["kill mud at surface"] == (6184, 829, 0)
+    assert (plot.trapped_drill_pipe_psi, plot.trapped_casing_psi) == (0, 0)
+
+
+def test_wait_and_weight_high_icp_trapped_pressure():
+    # SIDPP retaken 680, SICP 830, drill pipe reads 1,470 with SF 50:
+    # ICP 1,420, FCP kept at 829, actual friction with kill mud 818
+    # trapped = 50 + (829 - 818) = 61 - and the casing line ends on it.
+    plot = wait_and_weight_kill_plot(**{**WELL, "sidpp_psi": 680, "sicp_psi": 830, "icp_psi": 1420,
+                                        "kill_mud_friction_psi": 818})
+    assert (plot.trapped_drill_pipe_psi, plot.trapped_casing_psi) == (61, 61)
 
 
 # --- Warnings ---------------------------------------------------------------------

@@ -89,7 +89,7 @@ def test_annulus_bit_up():
 
 
 def test_drillers_method():
-    steps = drillers_method(SIDPP_PSI, SICP_PSI, 1400, 851, 2144, 6014)
+    steps = drillers_method(SIDPP_PSI, SICP_PSI, 1400, 851, 2144, 6014, 0, 697)   # SF 0, overbalance 697
     assert [(s.gauge, s.hold_psi, s.strokes) for s in steps] == [
         ("casing", 700, None),
         ("drill pipe", 1400, 6014),
@@ -97,7 +97,10 @@ def test_drillers_method():
         ("drill pipe and casing", 650, None),
         ("casing", 650, None),
         ("casing", 650, 2144),
-        ("drill pipe", 851, 6014),
+        ("drill pipe", 804, 6014),  # DP with kill mud at the bit: 851 + 650 + 0 - 697
         ("casing", None, None),
-        ("drill pipe and casing", 0, None),
+        ("drill pipe and casing", 0, None),         # 2nd: trapped pressure (clamped at 0)
+        ("choke", None, None),                      # 2nd: bleed if any pressure
+        ("drill pipe and casing", 0, None),         # 2nd: check - well dead
+        ("well", None, None),                       # 2nd: flow check
     ]
