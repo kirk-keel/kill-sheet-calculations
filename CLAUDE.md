@@ -303,30 +303,40 @@ Decided by the user:
 - First web release = the complete DRILLING package: Driller's, Wait and Weight, and
   volumetric + lubricate and bleed, every well/string type. (Bullhead and reverse
   circulation come in a later web release.)
-- Kill plot: TWO lines, drill pipe and annulus. Plot ONLY what can be calculated without a
-  gas model; mark the rest "depends on the influx".
+- Kill plot (surface stack): EVERY plot has BOTH lines - drill pipe AND annulus/casing - on
+  the same x-y chart. A line is NEVER left off.
+- Gas: a SINGLE-BUBBLE gas model (user choice) forecasts the casing line while gas is in the
+  annulus. Influx = one bubble at bottom, volume = PIT GAIN (new input); moved up with the
+  mud stroke by stroke; Boyle's law P1V1 = P2V2 (IADC #32) at constant BHP; casing =
+  BHP - mud hydrostatic - gas hydrostatic. Also gives pressure at the shoe as gas passes
+  (max when the top of the gas reaches the shoe - check vs fracture) and pit gain growth.
+  State its limits on the sheet: ignores temperature, Z, dispersion/slip; NOT valid in
+  oil-based mud; usually over-predicts the peak (errs safe). New calculation phase:
+  hand-worked example FIRST, then code/tests; applies to W&W and later subsea too.
 - Print: page 1 = well schematic (casing, shoe, open hole, string sections/crossovers, bit,
   KOP/EOB/heel) with KMW, ICP, FCP, MAMW, MAASP (original/after kill), volumes in bbl AND
   strokes. Page 2 = the table WITH an "Actual" column for observed values, plus the plot.
 - Plan: plot/table numbers computed in a new TESTED Python module; the page only draws them
   (plain SVG, no plotting library). Dropdown of the example wells; all inputs editable.
 
-Proposed, AWAITING the user's answers (ask these first in the next session):
-1. Annulus line = SIDPP - (KMW - OMW) x 0.052 x TVD of the kill-mud column in the annulus
-   (bottom up), drop rounded DOWN, floored at 0, annulus friction ignored; plotted only once
-   the annulus is all liquid. Baseline well (0.0572 psi/ft, zero at a 11,364 ft column):
-   - Driller's (strokes across both circulations): 1st circ DP flat 1,400, annulus not
-     plotted; 2nd circ DP 1,400 -> 829 by 6,184 stks (depth-based), annulus flat 650 until
-     kill mud reaches the bit, then 616 (6,334 stks, top of DC), 565 (6,687, top of HWDP),
-     287 (8,589, shoe), 0 at ~10,685, kill point 10,741.
-   - W&W: DP 1,400 -> 829 by 1,627 then 829; annulus not plotted until gas is out after one
-     bottoms-up (4,557 stks): column 7,606 ft -> 215 psi; 0 at ~6,128; kill point 6,184.
-   Does this match how the user forecasts casing pressure? (friction ignored; W&W gas out
-   after one bottoms-up from the start)
-2. Volumetric / L&B: x-axis = bbl bled / pumped; annulus line = hold pressures (staircase /
-   saw-tooth). What should the DRILL PIPE line be - SIDPP + safety margin + working pressure
-   with pipe on bottom and no float, or annulus line only?
-3. Agree the annulus-line drop is rounded DOWN (predicted casing pressure on the high side)?
+Driller's method, as the user runs it (plot must follow this):
+- 1st circulation: casing starts at SICP. Casing + a SAFETY MARGIN (team input) is held while
+  the pump is brought online. Once at kill rate and stable, the choke operator swaps to drill
+  pipe pressure and holds it (ICP) until the influx is out of the annulus. Casing pressure
+  RISES the whole time as the gas moves up (single-bubble model), then drops once it's out.
+- 2nd circulation: KWM down the string with casing held constant until KWM is at the bit,
+  then drill pipe held at FCP until KWM is at surface (casing then falls as KWM fills the
+  annulus: SIDPP - (KMW - OMW) x 0.052 x TVD of the kill-mud column, toward 0).
+
+Still to settle in the next session (ask first, briefly):
+1. Influx gradient for the bubble: estimate from SICP - SIDPP and bubble height, or assume
+   ~0.1 psi/ft for gas? Work a hand example of the single-bubble casing line on the
+   baseline well (needs a pit gain - ask the user for one).
+2. Volumetric / L&B plot: x-axis = bbl bled / pumped; annulus line = hold pressures
+   (staircase / saw-tooth). What is the DRILL PIPE line (both lines are always plotted)?
+3. Rounding of forecast casing pressures: drop rounded DOWN (forecast on the high side)?
+4. Wait and Weight annulus line: the same single-bubble model while the gas is in the
+   annulus, then the kill-mud fall-off - confirm with a hand example.
 
 ## Git / GitHub
 
