@@ -293,6 +293,41 @@ Web page (user: AFTER the surface stack is complete, BEFORE subsea) - NEXT:
 Subsea stack (adds choke line friction, riser margin, choke line volume/strokes):
 - Every method above, (a)-(d)
 
+## NEXT: web page (hand-off from the v1.0.0 session)
+
+Decided by the user:
+- GitHub Pages at https://kirk-keel.github.io/kill-sheet-calculations/, published by a
+  GitHub Actions workflow only after the tests pass.
+- Pyodide runs the real `killsheet` package in the browser (no JavaScript rewrite of the
+  formulas). The user accepts the few-second first load.
+- First web release = the complete DRILLING package: Driller's, Wait and Weight, and
+  volumetric + lubricate and bleed, every well/string type. (Bullhead and reverse
+  circulation come in a later web release.)
+- Kill plot: TWO lines, drill pipe and annulus. Plot ONLY what can be calculated without a
+  gas model; mark the rest "depends on the influx".
+- Print: page 1 = well schematic (casing, shoe, open hole, string sections/crossovers, bit,
+  KOP/EOB/heel) with KMW, ICP, FCP, MAMW, MAASP (original/after kill), volumes in bbl AND
+  strokes. Page 2 = the table WITH an "Actual" column for observed values, plus the plot.
+- Plan: plot/table numbers computed in a new TESTED Python module; the page only draws them
+  (plain SVG, no plotting library). Dropdown of the example wells; all inputs editable.
+
+Proposed, AWAITING the user's answers (ask these first in the next session):
+1. Annulus line = SIDPP - (KMW - OMW) x 0.052 x TVD of the kill-mud column in the annulus
+   (bottom up), drop rounded DOWN, floored at 0, annulus friction ignored; plotted only once
+   the annulus is all liquid. Baseline well (0.0572 psi/ft, zero at a 11,364 ft column):
+   - Driller's (strokes across both circulations): 1st circ DP flat 1,400, annulus not
+     plotted; 2nd circ DP 1,400 -> 829 by 6,184 stks (depth-based), annulus flat 650 until
+     kill mud reaches the bit, then 616 (6,334 stks, top of DC), 565 (6,687, top of HWDP),
+     287 (8,589, shoe), 0 at ~10,685, kill point 10,741.
+   - W&W: DP 1,400 -> 829 by 1,627 then 829; annulus not plotted until gas is out after one
+     bottoms-up (4,557 stks): column 7,606 ft -> 215 psi; 0 at ~6,128; kill point 6,184.
+   Does this match how the user forecasts casing pressure? (friction ignored; W&W gas out
+   after one bottoms-up from the start)
+2. Volumetric / L&B: x-axis = bbl bled / pumped; annulus line = hold pressures (staircase /
+   saw-tooth). What should the DRILL PIPE line be - SIDPP + safety margin + working pressure
+   with pipe on bottom and no float, or annulus line only?
+3. Agree the annulus-line drop is rounded DOWN (predicted casing pressure on the high side)?
+
 ## Git / GitHub
 
 - Repo: https://github.com/kirk-keel/kill-sheet-calculations (public, GitHub account `kirk-keel`)
