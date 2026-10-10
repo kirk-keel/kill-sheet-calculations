@@ -303,40 +303,68 @@ Decided by the user:
 - First web release = the complete DRILLING package: Driller's, Wait and Weight, and
   volumetric + lubricate and bleed, every well/string type. (Bullhead and reverse
   circulation come in a later web release.)
-- Kill plot (surface stack): EVERY plot has BOTH lines - drill pipe AND annulus/casing - on
-  the same x-y chart. A line is NEVER left off.
+- Kill plot (surface stack): drill pipe AND annulus/casing on the same x-y chart whenever the
+  drill pipe can be read. NEVER plot 0 unless the gauge reads 0 psi (user rule, v1.1 session):
+  pipe out of hole = no DP line, label "pipe out of hole"; off bottom with a float = no DP
+  line, label "no reading - float"; off bottom, no float = DP dashed grey, label "not a BHP
+  indicator" (gas below the bit).
 - Gas: a SINGLE-BUBBLE gas model (user choice) forecasts the casing line while gas is in the
-  annulus. Influx = one bubble at bottom, volume = PIT GAIN (new input); moved up with the
+  annulus. Influx = one bubble at the bit, volume = PIT GAIN (new input); moved up with the
   mud stroke by stroke; Boyle's law P1V1 = P2V2 (IADC #32) at constant BHP; casing =
-  BHP - mud hydrostatic - gas hydrostatic. Also gives pressure at the shoe as gas passes
-  (max when the top of the gas reaches the shoe - check vs fracture) and pit gain growth.
-  State its limits on the sheet: ignores temperature, Z, dispersion/slip; NOT valid in
-  oil-based mud; usually over-predicts the peak (errs safe). New calculation phase:
-  hand-worked example FIRST, then code/tests; applies to W&W and later subsea too.
+  BHP - hydrostatic of everything in the annulus (mud, gas, kill mud). State its limits on the
+  sheet: ignores temperature, Z, dispersion/slip; NOT valid in oil-based mud; usually
+  over-predicts the peak (errs safe). Applies to W&W and later subsea too.
+  - Influx gradient FROM THE GAUGES (user): height = pit gain / bottom annulus capacity
+    (whole ft); gradient = OMW gradient - (SICP - SIDPP) / height (4 places). WARN if it is
+    above ~0.25 psi/ft (probably not gas). If the gradient is <= 0 or >= the mud gradient,
+    DON'T use it: fall back to 0.1 psi/ft and WARN that the gauges are inconsistent (bad
+    gauges, or the influx isn't at the bottom).
+  - Gas pressure at the TOP of the bubble (user: conservative - more expansion, higher
+    casing); gas gradient scales with pressure (gradient x P / P at shut-in); iterate since
+    the height depends on the volume.
+  - Track MAX SHOE PRESSURE across the WHOLE kill (shoe = casing + hydrostatic above the shoe)
+    and report the strokes where it occurs - it is NOT always at top of gas at the shoe
+    (W&W baseline: max at 1,616 stk, just before kill mud enters the annulus). Check vs
+    fracture. Casing over MAASP after gas passes the shoe: say the shoe is the real check.
+  - Don't hard-code curve shapes (e.g. the W&W casing dip) - let the model produce them.
+  - Forecast pressures ONLY: ACADEMIC rounding (rule 3), depths to whole ft, round once at the
+    end. This does NOT change the three rules: KMW still always rounds UP (rule 1), maximums
+    still round DOWN (rule 2).
+  - Hand example (user-approved), baseline well, pit gain 10 bbl, SF 50: gradient 0.1048,
+    height 344 ft, BHP 6,919. Driller's 1st circ: peak casing 1,272 at 4,097 stk (pit gain
+    53.6), max shoe 3,681 at 2,240 stk, ends 700. W&W: peak casing 1,044 at 3,997 stk (pit
+    gain 65.3), max shoe 3,640 at 1,616 stk, casing 42 at kill mud to surface. Frac 3,909.
 - Print: page 1 = well schematic (casing, shoe, open hole, string sections/crossovers, bit,
   KOP/EOB/heel) with KMW, ICP, FCP, MAMW, MAASP (original/after kill), volumes in bbl AND
   strokes. Page 2 = the table WITH an "Actual" column for observed values, plus the plot.
 - Plan: plot/table numbers computed in a new TESTED Python module; the page only draws them
   (plain SVG, no plotting library). Dropdown of the example wells; all inputs editable.
 
-Driller's method, as the user runs it (plot must follow this):
-- 1st circulation: casing starts at SICP. Casing + a SAFETY MARGIN (team input) is held while
-  the pump is brought online. Once at kill rate and stable, the choke operator swaps to drill
-  pipe pressure and holds it (ICP) until the influx is out of the annulus. Casing pressure
-  RISES the whole time as the gas moves up (single-bubble model), then drops once it's out.
-- 2nd circulation: KWM down the string with casing held constant until KWM is at the bit,
-  then drill pipe held at FCP until KWM is at surface (casing then falls as KWM fills the
-  annulus: SIDPP - (KMW - OMW) x 0.052 x TVD of the kill-mud column, toward 0).
+Constant BHP start-up with a SAFETY MARGIN (SF, team input), every method (user):
+- Casing rises SICP -> SICP + SF and, through the U-tube, drill pipe rises SIDPP -> SIDPP + SF.
+  Pump brought up holding casing at SICP + SF; once at kill rate and stable, swap to the drill
+  pipe gauge, which now reads ICP + SF. BHP = formation pressure + SF the whole kill.
+- SF is CARRIED THROUGH the kill: FCP + SF, step-down chart + SF, 2nd circulation casing held
+  at SIDPP + SF. At final shut-in BOTH gauges must read the same trapped pressure (baseline:
+  DP = 650 + 50 - 658 = 42, casing 42) - show it as a check; if they don't match, something
+  is wrong. Then BLEED the trapped pressure through the choke in small increments to 0, do the
+  0 +/-10 psi dead-well check and a FLOW CHECK. Pressure building back = well not dead.
+- Driller's 1st circ: hold DP at ICP + SF until the gas is out; casing rises as gas comes up,
+  peaks with gas at surface, then falls to SIDPP + SF. 2nd circ: casing held at SIDPP + SF
+  until KWM at the bit, then DP held at FCP + SF until KWM at surface.
+- W&W (engineer's method): from the first stroke KWM goes down the DP while influx + OMW come
+  up the annulus. Casing held + SF on start-up/shut-down; at rate, DP follows the step-down
+  chart (+ SF) until KWM is at the bit, then FCP + SF until KWM is at surface.
 
-Still to settle in the next session (ask first, briefly):
-1. Influx gradient for the bubble: estimate from SICP - SIDPP and bubble height, or assume
-   ~0.1 psi/ft for gas? Work a hand example of the single-bubble casing line on the
-   baseline well (needs a pit gain - ask the user for one).
-2. Volumetric / L&B plot: x-axis = bbl bled / pumped; annulus line = hold pressures
-   (staircase / saw-tooth). What is the DRILL PIPE line (both lines are always plotted)?
-3. Rounding of forecast casing pressures: drop rounded DOWN (forecast on the high side)?
-4. Wait and Weight annulus line: the same single-bubble model while the gas is in the
-   annulus, then the kill-mud fall-off - confirm with a hand example.
+Volumetric / L&B plot (user): x-axis = bbl bled / pumped; casing = hold pressures.
+- Pipe on bottom, NO float: DP readable -> the sheet says "DP readable - use drill pipe
+  pressure method" (bleed holding SIDPP + margin constant). If plotted for illustration: DP
+  rises by Pw each build and falls by Pw each bleed (casing flat) - a saw-tooth mirroring BHP.
+- Pipe on bottom WITH a float: only casing rises (by SF + Pw, agreed before starting); DP flat.
+- Off bottom / out of hole: see the "never plot 0" labels above.
+
+NEXT step: write `kill_plot.py` + tests from the hand example above (scratch model reproduced
+these numbers), then the page.
 
 ## Git / GitHub
 
