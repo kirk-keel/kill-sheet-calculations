@@ -406,7 +406,7 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
 first, (3) the volumetric plot.
 
-Web page sub-phases (user-approved; stop after each). DONE: W1, W2, W3, W4. W1 plumbing - Pyodide page, Pages
+Web page sub-phases (user-approved; stop after each). DONE: W1-W5, released v1.1.0. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
 W2 example wells as a tested data module + dropdown + editable inputs + tables with an
 "Actual" column (Driller's, W&W, volumetric + L&B). W3 kill plot SVG - VERTICAL wells only
@@ -419,7 +419,11 @@ drill string if lines given, surface to bit, open hole, cased hole, total annulu
 volume = sum of rounded sections, strokes = volume / pump - total well system too (user: "can't
 have .6 of a stroke": 723.6 / 0.117 = 6,185, not 1,627 + 4,557 = 6,184)) and "schematic" (section top/bottom MD).
 Schematic drawn straight, to scale by MD (not the well path); points at the same MD share a label.
-Volumetric sheets have no schematic yet. W4 page 1 well schematic +
+Volumetric sheets have no schematic yet. W5 as built: print layout (page 1 schematic, numbers,
+volumes, depths, entered data; page 2 plot + kill steps with Actual; W&W vertical spills its
+step-down schedule onto page 3), Print button, #well_id links, README link and v1.1.0 tag.
+NEXT (user order): (2) deviated/horizontal kill plot with a hand example first (also the
+vertical TAPERED plot hand example), (3) the volumetric plot (+ volumetric schematic). W4 page 1 well schematic +
 summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with the web page).
 
 ## Git / GitHub
@@ -432,7 +436,8 @@ summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with th
 - Web page: `.github/workflows/pages.yml` runs after Tests passes on a push to main
   (workflow_run), builds `web/` with `web/build_site.py` into `_site/` (index.html, app.py,
   killsheet.zip of src/killsheet) and publishes it to GitHub Pages.
-- Release tags: v0.1, v0.1.1, v0.2 ... v0.19, v1.0.0 (surface stack complete). Minor
+- Release tags: v0.1, v0.1.1, v0.2 ... v0.19, v1.0.0 (surface stack complete), v1.1.0 (SF +
+  web page). Minor
   number for each new capability, patch number for fixes.
 
 ## Commands

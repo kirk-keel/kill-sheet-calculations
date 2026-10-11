@@ -30,6 +30,23 @@ Weight, volumetric and lubricate and bleed, bullheading, and reverse circulation
 vertical, deviated and horizontal wells with untapered and tapered strings. See the
 [roadmap](#roadmap).
 
+**Version 1.1 adds the safety margin and the web page.** Every Driller's and Wait and
+Weight kill now carries the team's safety margin (SF) from start-up to shut-in, checks the
+trapped pressure, bleeds it off and flow checks. The calculator also runs in your browser:
+
+### **[Open the web page](https://kirk-keel.github.io/kill-sheet-calculations/)**
+
+- Pick one of 22 example wells (Driller's, Wait and Weight, volumetric and lubricate and
+  bleed - vertical, deviated and horizontal, untapered and tapered) and change any input.
+  The sheet recalculates as you type.
+- Page 1: well schematic, kill mud weight, ICP, FCP, MAMW, MAASP, volumes in bbl and strokes.
+- Page 2: the kill plot (forecast drill pipe and casing pressure, vertical wells) and the
+  kill steps and schedules, with an **Actual** column to record the gauge readings.
+- **Print kill sheet** prints it on paper. A link like
+  `.../kill-sheet-calculations/#wait_and_weight_well` opens a chosen well.
+- Nothing is sent anywhere: the page runs this project's own tested Python code
+  in your browser (Pyodide). The first load takes a few seconds.
+
 ## Why I built it
 
 I built this calculator as a free resource for oilfield hands to plan and kill
@@ -642,10 +659,16 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] Deviated and horizontal, untapered string (**v0.19**)
 - [x] Deviated and horizontal, tapered string (**v1.0**) - **surface stack complete**
 
-### Web page (next - the surface stack is complete)
+### Web page
 
-- [ ] Web page, with a kill plot of forecast drill pipe and annulus pressure beside
-  the table, showing the inflection at each pipe change
+- [x] Safety margin, trapped-pressure bleed-off and flow check in Driller's and Wait and
+  Weight (**v1.1**)
+- [x] [Web page](https://kirk-keel.github.io/kill-sheet-calculations/): Driller's, Wait and
+  Weight, volumetric and lubricate and bleed, every well and string type, printable (**v1.1**)
+- [x] Kill plot of forecast drill pipe and casing pressure, vertical wells (**v1.1**)
+- [ ] Kill plot for deviated and horizontal wells (hand example first)
+- [ ] Volumetric plot, and a schematic for volumetric sheets
+- [ ] Bullheading and reverse circulation on the web page
 
 ### Subsea BOP stack
 

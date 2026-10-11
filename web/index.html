@@ -77,9 +77,38 @@
   .schematic .pipe-b { fill: var(--dp); opacity: 0.85; }
   .schematic .leader { stroke: var(--line); }
   .schematic .point { stroke: var(--casing); stroke-dasharray: 3 3; }
+  .print-only { display: none; }
+  @media print {
+    :root, :root * { --ink: #000; --muted: #444; --line: #999; --head: #e8e8e8; --bg: #fff; --panel: #f4f4f4;
+                     --link: #000; --warn-bg: #fff; --warn-ink: #000; --err-bg: #fff; --err-ink: #000;
+                     --input-bg: #fff; --dp: #1f5fbf; --casing: #c0392b; --grid: #ddd; }
+    @page { size: letter; margin: 12mm; }
+    body { padding: 0; font-size: 11px; }
+    main { max-width: none; }
+    h1, main > p.muted, #status, .bar, #inputs, details { display: none; }
+    .layout { display: block; }
+    .print-only { display: block; }
+    .page-break { break-before: page; }
+    .page1 { grid-template-columns: 250px 1fr; }
+    .schematic svg { max-height: 330px; }
+    .depths { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .inputs-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 12px; font-size: 10px; }
+    .inputs-grid .wide { grid-column: span 2; }
+    .plot-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; align-items: start; }
+    .plot-row .summary { max-width: none; }
+    .keep { break-inside: avoid; }
+    .note { font-size: 9px; }
+    td input.actual { height: 15px; padding: 0 4px; }
+    th, td { padding: 2px 5px; }
+    tr, .box, svg { break-inside: avoid; }
+    .box.warn { border: 1px solid #000; }
+    input.actual { width: 64px; border: 1px solid #666; }
+    h3 { margin: 10px 0 4px; }
+  }
   .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0; font-size: 0.9em; }
   .swatch { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
   #status { padding: 12px 0; }
+  #footer::after { content: " Printed " attr(data-printed) "."; }
 </style>
 </head>
 <body>
@@ -94,11 +123,14 @@
       <label for="well">Example well</label>
       <select id="well"></select>
       <button id="reset" type="button">Reset to the example</button>
+      <button id="print" type="button">Print kill sheet</button>
     </div>
     <div class="layout">
       <section id="inputs" aria-label="Well data"></section>
       <section id="results" aria-label="Kill sheet"></section>
     </div>
+    <p class="print-only note" id="footer">Kill Sheet Calculator - kirk-keel.github.io/kill-sheet-calculations.
+      Forecasts and schedules are a plan: check every number before the kill and record the actual readings.</p>
   </div>
 </main>
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
@@ -183,6 +215,27 @@
 
   // ---------- Results ----------
 
+  // The well and kick data as entered - shown on the printout, where the input panel is hidden.
+  function inputsTable() {
+    const isWW = inputs.method === "Wait and Weight";
+    const rows = [];
+    for (const [name, label, type, optional] of forms[well.kind]) {
+      if (name === "title" || (optional === "Wait and Weight only" && !isWW)) continue;
+      const value = inputs[name];
+      if (value == null || value === "" || (Array.isArray(value) && !value.length)) continue;
+      let shown;
+      if (type === "sections") shown = value.map(r => `${r[0]}: ${r[1]} x ${int(r[2])} ft`).join("<br>");
+      else if (type === "points") shown = value.map(r => `${r[0]} ${int(r[1])} MD / ${int(r[2])} TVD`).join("<br>");
+      else if (type === "numbers") shown = value.join(", ");
+      else if (typeof value === "number") shown = `${value.toLocaleString("en-US")} ${type}`;
+      else shown = value;
+      const wide = type === "sections" || type === "points" || type === "numbers";
+      rows.push(`<div class="${wide ? "wide" : ""}"><span class="note">${esc(label)}</span><br>` +
+                `${type === "sections" || type === "points" ? shown.split("<br>").map(esc).join("<br>") : esc(shown)}</div>`);
+    }
+    return `<div class="print-only"><h3>Well and kick data (as entered)</h3><div class="inputs-grid">${rows.join("")}</div></div>`;
+  }
+
   function actualCell(key) {
     return `<td><input class="actual" inputmode="decimal" aria-label="Actual" data-actual="${key}" value="${esc(actuals[key] ?? "")}"></td>`;
   }
@@ -222,9 +275,11 @@
     // Page 1: the schematic beside the key numbers and volumes.
     html = `<h2>${esc(s.title)}</h2><div class="page1"><div>${drawSchematic(s.schematic)}</div>` +
            `<div>${html.slice(html.indexOf("<table"))}<h3>Volumes</h3>${volumes}</div></div>`;
+    html += `<div class="depths"><div>${depthTable("Drill string, top down (kill mud)", s.string_depths)}</div>` +
+            `<div>${depthTable("Annulus, bit up", s.annulus_depths)}</div></div>`;
+    html += inputsTable();
+    html += `<div class="page-break"></div>`;               // printed page 2: the plot and the kill
     html += drawPlot(s.plot);
-    html += depthTable("Drill string, top down (kill mud)", s.string_depths);
-    html += depthTable("Annulus, bit up", s.annulus_depths);
     html += `<h3>${esc(s.method)}</h3>`;
     if (s.icp_check) {
       html += `<div class="box warn">ICP check at kill rate: ICP + SF ${int(s.icp_check.icp_plus_sf_psi)} psi, ` +
@@ -245,14 +300,14 @@
           `<td class="note">${esc(step.note)}</td></tr>`;
       }));
     if (s.schedule) {
-      html += `<h3>Drill pipe step-down schedule (${esc(s.step_method)})</h3>` +
+      html += `<div class="keep"><h3>Drill pipe step-down schedule (${esc(s.step_method)})</h3>` +
               `<p class="note">Pressure follows where the kill mud is. Hold the "psi + SF" column.</p>`;
       html += table([["Strokes", "num"], ["Kill mud MD ft", "num"], ["TVD ft", "num"], ["psi", "num"],
                      ["psi + SF", "num"], ["Actual"], [""]],
         s.schedule.map((r, i) => `<tr><td class="num">${int(r.strokes)}</td><td class="num">${int(r.md_ft)}</td>` +
           `<td class="num">${int(r.tvd_ft)}</td><td class="num">${int(r.pressure_psi)}</td>` +
           `<td class="num"><b>${int(r.pressure_plus_sf_psi)}</b></td>${actualCell("schedule" + i)}` +
-          `<td class="note">${r.label === "step" ? "" : esc(r.label)}</td></tr>`));
+          `<td class="note">${r.label === "step" ? "" : esc(r.label)}</td></tr>`)) + `</div>`;
     }
     return html;
   }
@@ -290,6 +345,8 @@
     html += table([["Annular capacity"], ["bbl/ft", "num"], ["Bleed bbl", "num"], [""]],
       s.capacity_choices.map(c => `<tr><td>${esc(c.choice)}</td><td class="num">${dec(c.capacity_bbl_per_ft, 4)}</td>` +
         `<td class="num">${dec(c.bleed_bbl, 1)}</td><td>${c.used ? "<b>used</b>" : ""}</td></tr>`));
+    html += inputsTable();
+    html += `<div class="page-break"></div>`;               // printed page 2: the cycle tables
     html += `<h3>Volumetric method</h3><p>Wait: let SICP rise from ${int(s.sicp_psi)} to ` +
             `${int(s.first_hold_psi)} psi (safety margin + working pressure).</p>`;
     html += table([["Cycle", "num"], ["Hold casing psi", "num"], ["Bleed bbl", "num"], ["Total bbl", "num"],
@@ -430,12 +487,12 @@
            `<polyline class="dp" points="${line("drill_pipe_psi")}"/>` +
            `<line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>` +
            `<line class="axis" x1="${L}" x2="${L}" y1="${T}" y2="${H - B}"/>`;
-    html += `<div class="plot"><svg viewBox="0 0 ${W} ${H}" role="img" ` +
+    html += `<div class="plot-row"><div><div class="plot"><svg viewBox="0 0 ${W} ${H}" role="img" ` +
             `aria-label="Kill plot: drill pipe and casing pressure against strokes">${svg}</svg></div>`;
     html += `<div class="legend"><span><span class="swatch" style="border-color: var(--dp)"></span>Drill pipe</span>` +
             `<span><span class="swatch" style="border-color: var(--casing)"></span>Casing</span>` +
             `<span><span class="swatch" style="border-color: var(--muted); border-top-style: dashed"></span>` +
-            `MAASP (original mud)</span></div>`;
+            `MAASP (original mud)</span></div></div><div>`;
     const peak = plot.peak_casing, shoe = plot.max_shoe;
     html += summary([
       ["Pit gain", dec(plot.pit_gain_bbl, 1), "bbl"],
@@ -451,7 +508,7 @@
       table([["#", "num"], ["Strokes", "num"], ["Event"], ["DP psi", "num"], ["Casing psi", "num"]],
         events.flatMap((e, i) => e.rows.map((r, j) => `<tr><td class="num">${j ? "" : i + 1}</td>` +
           `<td class="num">${int(r.strokes)}</td><td>${esc(r.label)}</td><td class="num">${int(r.drill_pipe_psi)}</td>` +
-          `<td class="num">${int(r.casing_psi)}</td></tr>`))) + `</details>`;
+          `<td class="num">${int(r.casing_psi)}</td></tr>`))) + `</details></div></div>`;
     return html;
   }
 
@@ -474,6 +531,8 @@
 
   function chooseWell(id) {
     well = wells.find(w => w.id === id);
+    document.getElementById("well").value = id;
+    history.replaceState(null, "", "#" + id);       // a link to this well
     inputs = clone(well.inputs);
     actuals = {};
     drawInputs();
@@ -491,6 +550,10 @@
       `<optgroup label="${esc(group)}">${options.join("")}</optgroup>`).join("");
     select.addEventListener("change", () => chooseWell(select.value));
     document.getElementById("reset").addEventListener("click", () => chooseWell(select.value));
+    document.getElementById("print").addEventListener("click", () => window.print());
+    window.addEventListener("beforeprint", () => {
+      document.getElementById("footer").dataset.printed = new Date().toLocaleString();
+    });
 
     const panel = document.getElementById("inputs");
     panel.addEventListener("input", event => {
@@ -513,7 +576,8 @@
     document.getElementById("results").addEventListener("input", event => {
       if (event.target.dataset.actual) actuals[event.target.dataset.actual] = event.target.value;
     });
-    chooseWell(wells[0].id);
+    const linked = wells.find(w => "#" + w.id === location.hash);
+    chooseWell((linked ?? wells[0]).id);
   }
 
   async function main() {
