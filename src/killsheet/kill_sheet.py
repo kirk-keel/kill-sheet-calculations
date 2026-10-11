@@ -21,7 +21,8 @@ from killsheet.formulas import (
     maasp,
     max_allowable_mud_weight,
 )
-from killsheet.kill_plot import MODEL_LIMITS, drillers_kill_plot, wait_and_weight_kill_plot
+from killsheet.formulas import PSI_PER_FT_PER_PPG
+from killsheet.kill_plot import MODEL_LIMITS, drillers_kill_plot, shoe_margin_warning, wait_and_weight_kill_plot
 from killsheet.rounding import round_to_tenth
 from killsheet.lubricate_and_bleed import cycles_past_kop, kill_mud_column_ft, lubricate_and_bleed_table
 from killsheet.schedule import TEN_STEPS, pressure_schedule
@@ -55,8 +56,18 @@ DRILLERS = "Driller's method"
 WAIT_AND_WEIGHT = "Wait and Weight"
 
 PLOT_NEEDS_PIT_GAIN = "Enter the pit gain to forecast the kill plot."
-PLOT_VERTICAL_ONLY = ("Kill plot for deviated and horizontal wells is coming in a later release "
-                      "(vertical wells only for now).")
+
+
+def kill_mud_rounding_note(sidpp_psi, bit_tvd_ft, original_mud_weight_ppg, kill_mud_weight_ppg, overbalance_psi):
+    """Wait and Weight: what rounding the kill mud UP adds to BHP during the step-down.
+
+        Exact KMW = OMW + SIDPP / (0.052 x Bit TVD)   (shown to 3 places, for information)
+        Added     = Kill mud overbalance - SIDPP
+    The schedule takes off SIDPP; the kill mud adds the whole overbalance.
+    """
+    exact = original_mud_weight_ppg + sidpp_psi / (PSI_PER_FT_PER_PPG * bit_tvd_ft)
+    return (f"Kill mud rounding ({exact:.3f} -> {kill_mud_weight_ppg:.1f} ppg) adds "
+            f"{overbalance_psi - sidpp_psi:,} psi to BHP during the step-down.")
 
 
 def without_names(sections):
@@ -153,7 +164,7 @@ def kill_sheet(
 
     safety_margin_psi: SF held on bottom for the whole kill, chosen by the team.
     pit_gain_bbl: the kick size, for the kill plot (killsheet.kill_plot). Leave
-                  out for no plot. Vertical wells only for now.
+                  out for no plot.
 
     Wait and Weight only:
       sidpp_at_start_psi - SIDPP retaken (float bumped) just before pump start-up
@@ -226,6 +237,7 @@ def kill_sheet(
         "icp_check": None,
         "step_method": None,
         "schedule": None,
+        "kill_mud_rounding_note": None,
     }
     btsurf = sheet["bit_to_surface_strokes"]
     sheet["volumes"] = volume_table(string, open_hole, without_names(cased_hole_annulus), pump,
@@ -239,19 +251,19 @@ def kill_sheet(
 
     if pit_gain_bbl is not None and pit_gain_bbl <= 0:
         raise ValueError("Pit gain must be greater than 0 bbl.")
-    vertical = bit_md_ft == bit_tvd_ft and shoe_md_ft == shoe_tvd_ft and not key_points
     plot_inputs = dict(
         original_mud_weight_ppg=original_mud_weight_ppg, kill_mud_weight_ppg=kmw, bit_tvd_ft=bit_tvd_ft,
         shoe_tvd_ft=shoe_tvd_ft, mamw_ppg=mamw, maasp_psi=sheet["maasp_original_psi"],
         drill_string_sections=string, annulus_sections=annulus, pump_output_bbl_per_stk=pump,
         surface_line_volume_bbl=surface_line_volume_bbl, safety_margin_psi=sf, pit_gain_bbl=pit_gain_bbl,
+        bit_md_ft=bit_md_ft, shoe_md_ft=shoe_md_ft, key_points=key_points,
     )
     plot = None
 
     if method == DRILLERS:
         overbalance = kill_mud_overbalance(kmw, original_mud_weight_ppg, bit_tvd_ft)
         steps = drillers_method(sidpp_psi, sicp_psi, icp, fcp, stb, btsurf, sf, overbalance)
-        if pit_gain_bbl is not None and vertical:
+        if pit_gain_bbl is not None:
             plot = drillers_kill_plot(sidpp_psi=sidpp_psi, sicp_psi=sicp_psi, icp_psi=icp, fcp_psi=fcp,
                                       **plot_inputs)
     else:
@@ -279,9 +291,18 @@ def kill_sheet(
         steps = wait_and_weight_method(sicp_at_start, icp, fcp, kmw, stb, btsurf, sf, friction)
         schedule = pressure_schedule(icp, fcp, string, pump, surface_line_volume_bbl, step_method,
                                      sidpp_psi=sidpp_at_start, bit_tvd_ft=bit_tvd_ft, key_points=key_points)
-        if pit_gain_bbl is not None and vertical:
+        sheet["kill_mud_rounding_note"] = kill_mud_rounding_note(
+            sidpp_psi, bit_tvd_ft, original_mud_weight_ppg, kmw,
+            kill_mud_overbalance(kmw, original_mud_weight_ppg, bit_tvd_ft))
+        if pit_gain_bbl is not None:
             plot = wait_and_weight_kill_plot(sidpp_psi=sidpp_at_start, sicp_psi=sicp_at_start, icp_psi=icp,
                                              fcp_psi=fcp, kill_mud_friction_psi=friction, **plot_inputs)
+            # Same well, same gauges, Driller's method: is W&W worse at the shoe?
+            compare = drillers_kill_plot(sidpp_psi=sidpp_at_start, sicp_psi=sicp_at_start, icp_psi=icp,
+                                         fcp_psi=fcp, **plot_inputs)
+            margin = shoe_margin_warning(plot, compare)
+            if margin:
+                plot = plot._replace(warnings=plot.warnings + [margin])
         sheet["step_method"] = step_method
         sheet["schedule"] = [
             {"strokes": row.strokes, "md_ft": row.md_ft, "tvd_ft": row.tvd_ft,
@@ -291,8 +312,6 @@ def kill_sheet(
     sheet["steps"] = [step._asdict() for step in steps]
     if pit_gain_bbl is None:
         sheet["plot"] = {"unavailable": PLOT_NEEDS_PIT_GAIN}
-    elif not vertical:
-        sheet["plot"] = {"unavailable": PLOT_VERTICAL_ONLY}
     else:
         sheet["plot"] = {
             "pit_gain_bbl": pit_gain_bbl,
@@ -304,6 +323,8 @@ def kill_sheet(
             "trapped_drill_pipe_psi": plot.trapped_drill_pipe_psi,
             "trapped_casing_psi": plot.trapped_casing_psi,
             "warnings": plot.warnings,
+            "notes": list(plot.notes),
+            "casing_forecast_valid": plot.casing_forecast_valid,
             "model_limits": MODEL_LIMITS,
         }
     return sheet

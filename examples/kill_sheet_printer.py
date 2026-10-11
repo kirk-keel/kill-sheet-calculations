@@ -53,6 +53,8 @@ def print_kill_sheet(**well):
     print()
 
     print(sheet["method"])
+    if sheet["kill_mud_rounding_note"]:
+        print(f"  {sheet['kill_mud_rounding_note']}")
     check = sheet["icp_check"]
     if check is not None:
         print(f"  ICP check at kill rate: ICP + SF {check['icp_plus_sf_psi']:,} psi, "

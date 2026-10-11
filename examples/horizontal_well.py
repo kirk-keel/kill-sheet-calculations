@@ -26,7 +26,7 @@ WELL = dict(
     test_mud_weight_ppg=10.0,
     # Kick data
     sidpp_psi=650,
-    sicp_psi=700,
+    sicp_psi=650,                       # influx in the lateral: SICP reads SIDPP
     pit_gain_bbl=10,                    # kick size, for the kill plot
     scr_pressure_psi=750,               # at 30 spm
     safety_margin_psi=50,               # held on bottom, chosen by the team

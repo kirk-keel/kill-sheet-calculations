@@ -249,7 +249,14 @@ def test_drillers_end_trapped_pressure():
 def test_drillers_warns_casing_over_maasp_but_shoe_is_the_check():
     warnings = DRILLERS.warnings
     assert len(warnings) == 1
-    assert "above MAASP" in warnings[0] and "real check" in warnings[0]
+    assert "above MAASP" in warnings[0] and "with the gas above the shoe" in warnings[0]
+    assert "NOT a shoe exceedance" in warnings[0] and "3,681 psi max vs fracture 3,909 psi" in warnings[0]
+
+
+def test_casing_above_maasp_with_gas_below_the_shoe_is_a_shoe_risk():
+    peak = DRILLERS.peak_casing._replace(gas_top_ft=6_000)                  # gas still below the 5,150 ft shoe
+    warnings = plot_warnings(peak, DRILLERS.max_shoe, 3909, 1124, 42, 42, shoe_md_ft=5_150)
+    assert any("gas still below the shoe - the shoe is at risk" in w for w in warnings)
 
 
 def test_drillers_warns_shoe_above_fracture():
@@ -339,3 +346,26 @@ def test_warning_shoe_above_fracture():
     warnings = plot_warnings(peak, shoe, 3680, 1124, 42, 42)                # 3,681 > 3,680
     assert any("ABOVE the fracture pressure 3,680" in w for w in warnings)
     assert not any("ABOVE the fracture" in w for w in plot_warnings(peak, shoe, 3681, 1124, 42, 42))
+
+
+def test_influx_gradient_below_0_05_is_not_physical():
+    # Deviated well with the vertical well's gauges: 150 psi over 298 ft TVD
+    gradient, warning = influx_gradient(650, 800, 0.5408, 298)
+    assert gradient == 0.0374                                 # used, with the warning
+    assert "Influx gradient below 0.05 psi/ft is not physical. Check SICP/SIDPP and the influx volume." in warning
+
+
+def test_gas_influx_uses_the_tvd_height():
+    # 30 deg tangent below 4,000 MD / 3,955 TVD: 344 ft MD = 298 ft TVD
+    survey = ((3_000, 3_000), (4_000, 3_955), (5_380, 5_150), (12_712, 11_500))
+    annulus = [(0.0291, 600), (0.0459, 900), (0.0459, 5_832), (0.0489, 5_380)]
+    gas, warning = gas_influx(10, 650, 780, 0.5408, 11_500, annulus, 12_712, survey)
+    assert (gas.height_ft, gas.height_tvd_ft, gas.gradient_psi_per_ft, warning) == (344, 298, 0.1046, None)
+
+
+def test_gas_influx_in_the_lateral_assumes_0_1():
+    survey = ((9_000, 9_000), (9_900, 9_573), (14_900, 9_573))
+    annulus = [(0.0291, 600), (0.0459, 900), (0.0459, 3_500), (0.0489, 9_900)]
+    gas, warning = gas_influx(10, 650, 650, 0.5408, 9_573, annulus, 14_900, survey)
+    assert (gas.height_tvd_ft, gas.gradient_psi_per_ft, warning) == (0, 0.1, None)
+    assert gas.top_pressure_psi == 5827                       # no vertical height: formation pressure

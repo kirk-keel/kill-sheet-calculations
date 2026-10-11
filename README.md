@@ -487,6 +487,7 @@ Baseline well, Wait and Weight, from `python examples/wait_and_weight_well.py`
 
 ```
 Wait and Weight
+  Kill mud rounding (11.487 -> 11.5 ppg) adds 8 psi to BHP during the step-down.
   kill circulation (kill mud)
     weight up  pits
                weight up the active system to 11.5 ppg; retake SIDPP (bump the float) and SICP just before pump start-up
@@ -666,7 +667,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
 - [x] [Web page](https://kirk-keel.github.io/kill-sheet-calculations/): Driller's, Wait and
   Weight, volumetric and lubricate and bleed, every well and string type, printable (**v1.1**)
 - [x] Kill plot of forecast drill pipe and casing pressure, vertical wells (**v1.1**)
-- [ ] Kill plot for deviated and horizontal wells (hand example first)
+- [x] Kill plot for deviated and horizontal wells (**v1.2**)
 - [ ] Volumetric plot, and a schematic for volumetric sheets
 - [ ] Bullheading and reverse circulation on the web page
 

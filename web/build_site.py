@@ -1,7 +1,8 @@
 """Builds the web page into _site/ (what GitHub Pages publishes).
 
   _site/index.html     the page
-  _site/app.py         the glue the page runs in Pyodide
+  _site/worker.js      runs Pyodide in the background (the page never freezes)
+  _site/app.py         the glue the worker runs in Pyodide
   _site/killsheet.zip  the killsheet package and the example wells, unpacked in the browser
 
 Run it with:  python web/build_site.py
@@ -22,7 +23,7 @@ def build():
     if SITE.exists():
         shutil.rmtree(SITE)
     SITE.mkdir()
-    for name in ("index.html", "app.py"):
+    for name in ("index.html", "worker.js", "app.py"):
         shutil.copy(ROOT / "web" / name, SITE / name)
     with zipfile.ZipFile(SITE / "killsheet.zip", "w", zipfile.ZIP_DEFLATED) as package:
         for path in sorted(PACKAGE.glob("*.py")):

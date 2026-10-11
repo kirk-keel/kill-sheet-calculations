@@ -124,6 +124,7 @@
       <select id="well"></select>
       <button id="reset" type="button">Reset to the example</button>
       <button id="print" type="button">Print kill sheet</button>
+      <span id="busy" class="muted" role="status" hidden>Calculating...</span>
     </div>
     <div class="layout">
       <section id="inputs" aria-label="Well data"></section>
@@ -133,11 +134,27 @@
       Forecasts and schedules are a plan: check every number before the kill and record the actual readings.</p>
   </div>
 </main>
-<script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
 <script>
   // The page only draws: every number comes from the killsheet Python package
   // (web/app.py -> killsheet.kill_sheet). Nothing is calculated in JavaScript.
-  let pyodide, wells, forms, well, inputs, actuals = {}, timer;
+  let wells, forms, well, inputs, actuals = {}, timer;
+
+  // The calculator runs in a background worker (worker.js) so the page never freezes.
+  const worker = new Worker("worker.js", {type: "module"});
+  const waiting = new Map();
+  let lastId = 0;
+  worker.onmessage = ({data}) => {
+    const {resolve, reject} = waiting.get(data.id);
+    waiting.delete(data.id);
+    data.error ? reject(new Error(data.error)) : resolve(data.result);
+  };
+  function python(call, ...args) {
+    const id = ++lastId;
+    return new Promise((resolve, reject) => {
+      waiting.set(id, {resolve, reject});
+      worker.postMessage({id, call, args});
+    });
+  }
 
   const esc = text => String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
   const int = n => n.toLocaleString("en-US");
@@ -281,6 +298,7 @@
     html += `<div class="page-break"></div>`;               // printed page 2: the plot and the kill
     html += drawPlot(s.plot);
     html += `<h3>${esc(s.method)}</h3>`;
+    if (s.kill_mud_rounding_note) html += `<p>${esc(s.kill_mud_rounding_note)}</p>`;
     if (s.icp_check) {
       html += `<div class="box warn">ICP check at kill rate: ICP + SF ${int(s.icp_check.icp_plus_sf_psi)} psi, ` +
               `drill pipe reads ${int(s.icp_check.observed_psi)} psi - ${esc(s.icp_check.message)}</div>`;
@@ -452,7 +470,8 @@
     const W = 720, H = 380, L = 58, R = 16, T = 34, B = 42;
     const xMax = Math.max(...pts.map(p => p.strokes));
     const xStep = niceStep(xMax, 8), xTop = Math.ceil(xMax / xStep) * xStep;
-    const yMaxRaw = Math.max(plot.maasp_psi, ...pts.map(p => Math.max(p.drill_pipe_psi, p.casing_psi)));
+    const valid = plot.casing_forecast_valid;      // false: drill pipe only (horizontal gauges don't fit)
+    const yMaxRaw = Math.max(plot.maasp_psi, ...pts.map(p => Math.max(p.drill_pipe_psi, valid ? p.casing_psi : 0)));
     const yStep = niceStep(yMaxRaw * 1.05, 6), yTop = Math.ceil(yMaxRaw * 1.05 / yStep) * yStep;
     const x = v => L + (W - L - R) * v / xTop, y = v => H - B - (H - T - B) * v / yTop;
     let svg = "";
@@ -483,26 +502,31 @@
     svg += `<line class="maasp" x1="${L}" x2="${W - R}" y1="${y(plot.maasp_psi)}" y2="${y(plot.maasp_psi)}"/>` +
            `<text x="${W - R - 4}" y="${y(plot.maasp_psi) - 5}" text-anchor="end">MAASP ${int(plot.maasp_psi)}</text>`;
     const line = key => pts.map(p => `${x(p.strokes).toFixed(1)},${y(p[key]).toFixed(1)}`).join(" ");
-    svg += `<polyline class="casing" points="${line("casing_psi")}"/>` +
-           `<polyline class="dp" points="${line("drill_pipe_psi")}"/>` +
+    if (valid) svg += `<polyline class="casing" points="${line("casing_psi")}"/>`;
+    else svg += `<text class="event-num" x="${(L + W - R) / 2}" y="${T + 24}" text-anchor="middle">` +
+                `Casing forecast does not apply - see the warning. Use the drill pipe schedule only.</text>`;
+    svg += `<polyline class="dp" points="${line("drill_pipe_psi")}"/>` +
            `<line class="axis" x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}"/>` +
            `<line class="axis" x1="${L}" x2="${L}" y1="${T}" y2="${H - B}"/>`;
     html += `<div class="plot-row"><div><div class="plot"><svg viewBox="0 0 ${W} ${H}" role="img" ` +
             `aria-label="Kill plot: drill pipe and casing pressure against strokes">${svg}</svg></div>`;
     html += `<div class="legend"><span><span class="swatch" style="border-color: var(--dp)"></span>Drill pipe</span>` +
-            `<span><span class="swatch" style="border-color: var(--casing)"></span>Casing</span>` +
+            (valid ? `<span><span class="swatch" style="border-color: var(--casing)"></span>Casing</span>` : "") +
             `<span><span class="swatch" style="border-color: var(--muted); border-top-style: dashed"></span>` +
             `MAASP (original mud)</span></div></div><div>`;
     const peak = plot.peak_casing, shoe = plot.max_shoe;
     html += summary([
       ["Pit gain", dec(plot.pit_gain_bbl, 1), "bbl"],
-      ["Peak casing", `${int(peak.casing_psi)}`, `psi at ${int(peak.strokes)} stks (gas ${dec(peak.gas_volume_bbl, 1)} bbl)`],
-      ["Max shoe pressure", `${int(shoe.shoe_psi)}`, `psi at ${int(shoe.strokes)} stks`],
-      ["Fracture at the shoe", `${int(plot.fracture_at_shoe_psi)}`,
-       `psi (${int(plot.fracture_at_shoe_psi - shoe.shoe_psi)} psi above the max shoe pressure)`],
+      ...(valid ? [
+        ["Peak casing", `${int(peak.casing_psi)}`, `psi at ${int(peak.strokes)} stks (gas ${dec(peak.gas_volume_bbl, 1)} bbl)`],
+        ["Max shoe pressure", `${int(shoe.shoe_psi)}`, `psi at ${int(shoe.strokes)} stks`],
+        ["Fracture at the shoe", `${int(plot.fracture_at_shoe_psi)}`,
+         `psi (${int(plot.fracture_at_shoe_psi - shoe.shoe_psi)} psi above the max shoe pressure)`],
+      ] : []),
       ["Trapped pressure (DP / casing)", `${int(plot.trapped_drill_pipe_psi)} / ${int(plot.trapped_casing_psi)}`, "psi"],
     ]);
-    html += plot.warnings.map(w => `<div class="box warn">${esc(w)}</div>`).join("");
+    html += plot.warnings.map(w => `<div class="box ${valid ? "warn" : "error"}">${esc(w)}</div>`).join("");
+    html += plot.notes.map(n => `<p class="note">${esc(n)}</p>`).join("");
     html += `<p class="note">${esc(plot.model_limits)}</p>`;
     html += `<details><summary>Plot events (numbered on the chart)</summary>` +
       table([["#", "num"], ["Strokes", "num"], ["Event"], ["DP psi", "num"], ["Casing psi", "num"]],
@@ -512,14 +536,19 @@
     return html;
   }
 
-  function calculate() {
+  let latest = 0;
+  async function calculate() {
     const results = document.getElementById("results");
     const problem = checkInputs();
     if (problem) {
       results.innerHTML = `<div class="box error">${esc(problem)}</div>`;
       return;
     }
-    const answer = JSON.parse(pyodide.globals.get("calculate")(well.kind, JSON.stringify(inputs)));
+    const mine = ++latest;
+    document.getElementById("busy").hidden = false;
+    const answer = JSON.parse(await python("calculate", well.kind, JSON.stringify(inputs)));
+    if (mine !== latest) return;                   // newer inputs are already being worked out
+    document.getElementById("busy").hidden = true;
     if (answer.error) {
       results.innerHTML = `<div class="box error">The calculator refused these inputs: ${esc(answer.error)}</div>`;
       return;
@@ -583,11 +612,7 @@
   async function main() {
     const status = document.getElementById("status");
     try {
-      pyodide = await loadPyodide();
-      const zip = await (await fetch("killsheet.zip")).arrayBuffer();
-      pyodide.unpackArchive(zip, "zip");          // the killsheet package and the example wells
-      pyodide.runPython(await (await fetch("app.py")).text());
-      ({wells, forms} = JSON.parse(pyodide.runPython("example_wells()")));
+      ({wells, forms} = JSON.parse(await python("example_wells")));
       setUp();
       document.getElementById("app").hidden = false;
       status.remove();

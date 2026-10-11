@@ -5,6 +5,10 @@ the right answers from the tested modules: baseline well values that match the
 printed example sheets.
 """
 
+import importlib
+import sys
+from pathlib import Path
+
 import pytest
 
 from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, kill_sheet, volumetric_sheet
@@ -142,11 +146,74 @@ def test_no_pit_gain_no_plot():
     assert kill_sheet(**BASELINE)["plot"] == {"unavailable": "Enter the pit gain to forecast the kill plot."}
 
 
-def test_deviated_well_plot_is_coming_later():
-    deviated = dict(BASELINE, bit_md_ft=12_000, drill_string=[("DP", 0.0178, 10_500), ("HWDP", 0.0087, 900),
-                    ("DC", 0.0077, 600)], open_hole_annulus=[("DC", 0.0291, 600), ("HWDP", 0.0459, 900),
-                    ("DP", 0.0459, 5_350)], key_points=[("KOP", 3_000, 3_000)])
-    assert "coming in a later release" in kill_sheet(**deviated, pit_gain_bbl=10)["plot"]["unavailable"]
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "examples"))
+
+
+def example(name, **changes):
+    return kill_sheet(**dict(importlib.import_module(name).WELL, **changes))
+
+
+def test_deviated_plot_user_approved_hand_example():
+    # 30 deg tangent: influx 344 ft MD = 298 ft TVD; SICP 780 -> gradient 0.5408 - 130 / 298 = 0.1046
+    plot = example("deviated_well")["plot"]
+    assert (plot["peak_casing"]["casing_psi"], plot["peak_casing"]["gas_volume_bbl"]) == (1272, 53.7)
+    assert abs(plot["peak_casing"]["strokes"] - 4580) <= 10
+    assert plot["max_shoe"]["shoe_psi"] == 3656                 # top of gas at the shoe
+    assert abs(plot["max_shoe"]["strokes"] - 2631) <= 30
+    assert (plot["trapped_drill_pipe_psi"], plot["trapped_casing_psi"]) == (42, 42)
+    assert plot["casing_forecast_valid"] and plot["notes"] == []
+
+
+def test_deviated_gauges_copied_from_the_vertical_well_are_not_physical():
+    # SICP 800 over 298 ft TVD: 0.5408 - 150 / 298 = 0.0374 psi/ft
+    warnings = example("deviated_well", sicp_psi=800)["plot"]["warnings"]
+    assert any("0.0374 psi/ft. Influx gradient below 0.05 psi/ft is not physical. "
+               "Check SICP/SIDPP and the influx volume." in w for w in warnings)
+
+
+def test_horizontal_casing_flat_until_the_gas_leaves_the_lateral():
+    plot = example("horizontal_well")["plot"]
+    assert plot["notes"] == ["Influx in the lateral: gas gradient 0.1 psi/ft assumed (can't be read from the "
+                             "gauges; conservative, over-predicts casing and shoe pressure)."]
+    leaves = next(p for p in plot["points"] if p["label"].startswith("top of gas leaves the lateral"))
+    assert abs(leaves["strokes"] - 1792) <= 10
+    flat = [p["casing_psi"] for p in plot["points"] if 0 < p["strokes"] <= leaves["strokes"]]
+    assert set(flat) <= {700, 701}                              # SIDPP + SF: no change while in the lateral
+    assert (plot["peak_casing"]["casing_psi"], plot["peak_casing"]["gas_volume_bbl"]) == (1211, 48.0)
+    assert plot["max_shoe"]["shoe_psi"] == 5877                  # shoe at the heel: shoe = BHP
+    assert (plot["trapped_drill_pipe_psi"], plot["trapped_casing_psi"]) == (3, 3)   # 650 + 50 - 697
+
+
+def test_horizontal_sicp_above_sidpp_casing_forecast_does_not_apply():
+    plot = example("horizontal_well", sicp_psi=700)["plot"]
+    assert plot["casing_forecast_valid"] is False
+    assert any("With the influx in the lateral, SICP should read the same as SIDPP (+/-10 psi). "
+               "SICP is 50 psi higher." in w and "Use the drill pipe schedule only." in w for w in plot["warnings"])
+    assert not any("MAASP" in w for w in plot["warnings"])      # no peak / shoe checks on an invalid forecast
+
+
+def test_horizontal_sicp_within_10_psi_is_fine():
+    assert example("horizontal_well", sicp_psi=660)["plot"]["casing_forecast_valid"] is True
+
+
+def test_wait_and_weight_kill_mud_rounding_note():
+    assert example("wait_and_weight_horizontal_well")["kill_mud_rounding_note"] == (
+        "Kill mud rounding (11.706 -> 11.8 ppg) adds 47 psi to BHP during the step-down.")
+    assert kill_sheet(**BASELINE, method=WAIT_AND_WEIGHT)["kill_mud_rounding_note"] == (
+        "Kill mud rounding (11.487 -> 11.5 ppg) adds 8 psi to BHP during the step-down.")
+    assert kill_sheet(**BASELINE)["kill_mud_rounding_note"] is None      # Driller's: no step-down
+
+
+def test_wait_and_weight_horizontal_shoe_margin_less_than_drillers():
+    plot = example("wait_and_weight_horizontal_well")["plot"]
+    assert (plot["fracture_at_shoe_psi"], plot["max_shoe"]["shoe_psi"]) == (5973, 5925)       # margin 48
+    assert ("W&W shoe margin 48 psi is less than Driller's 96 psi because of kill mud rounding. "
+            "Consider a smaller SF, a finer KMW rounding, or Driller's method.") in plot["warnings"]
+
+
+def test_wait_and_weight_vertical_shoe_margin_better_than_drillers_no_warning():
+    plot = kill_sheet(**BASELINE, method=WAIT_AND_WEIGHT, pit_gain_bbl=10)["plot"]
+    assert not any("shoe margin" in w for w in plot["warnings"])     # W&W 261 vs Driller's 228
 
 
 def test_pit_gain_must_be_more_than_0():

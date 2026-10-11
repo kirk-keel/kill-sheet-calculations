@@ -28,6 +28,7 @@ baseline must keep working and keep its tests.
   - `reverse_circulation.py` — reverse circulation kill for CWI wells
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
   - `kill_plot.py` — kill plot: single-bubble gas model, forecast DP and casing lines, shoe check
+    (vertical, deviated, horizontal; checked against tests/reference_model.py)
   - `kill_sheet.py` — the whole Driller's / W&W / volumetric sheet as plain dicts (calls the
     modules above, calculates nothing new); the printer AND the web page draw from it
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
@@ -352,6 +353,40 @@ Decided by the user:
   - Geometry: the bottom of the gas and the kill mud front move with ROUNDED section volumes
     (so they pass crossovers on crossover strokes); the gas column uses the CAPACITY
     (height = volume / capacity, like the influx height on the kill sheet).
+  - DEVIATED / HORIZONTAL (user-approved v1.2): POSITION by MD, PRESSURE by TVD (hydrostatic =
+    gradient x TVD height). Influx gradient = mud gradient - (SICP - SIDPP) / TVD HEIGHT of the
+    influx (deviated example: 344 ft MD = 298 ft TVD). Driller's 2nd circ DP and W&W BHP: kill mud
+    hydrostatic gain by TVD, friction by MD (the W&W schedule already does this).
+  - Horizontal, influx in the lateral (TVD height 0): no change in casing until the gas reaches
+    the build (user). Gradient 0.1 psi/ft assumed; note (user wording): "Influx in the lateral:
+    gas gradient 0.1 psi/ft assumed (can't be read from the gauges; conservative, over-predicts
+    casing and shoe pressure)." If SICP - SIDPP > 10 the forecast is INVALID: warning (user
+    wording, kill_plot.lateral_gauge_warning) on sheet AND plot, casing line NOT drawn, peak/shoe
+    checks dropped - "Use the drill pipe schedule only." Event "top of gas leaves the lateral".
+  - Gradient below 0.05 psi/ft: used, with the warning "Influx gradient below 0.05 psi/ft is not
+    physical. Check SICP/SIDPP and the influx volume." (0 or less / >= mud: 0.1 fallback, as before.)
+  - Peak casing above MAASP with the gas ABOVE the shoe: "This is NOT a shoe exceedance: MAASP
+    assumes mud from the shoe to surface. The shoe limit is the max shoe pressure." With the gas
+    still BELOW the shoe: "WARNING ... the shoe is at risk".
+  - W&W kill mud rounding (user): keep the schedule (crews' hand sheets must match). ALWAYS print
+    "Kill mud rounding (11.706 -> 11.8 ppg) adds 47 psi to BHP during the step-down." (= overbalance
+    - SIDPP). Warn when the W&W shoe margin (fracture - max shoe) is less than Driller's on the same
+    well and gauges: "W&W shoe margin 48 psi is less than Driller's 96 psi because of kill mud
+    rounding. Consider a smaller SF, a finer KMW rounding, or Driller's method." NO fixed margin
+    threshold (user: not for now).
+  - Example gauges fixed (user): deviated wells SICP 780 (650 + (0.5408 - 0.1) x 298 = 781; the
+    800 copied from the vertical well gave 0.0374 psi/ft); horizontal wells SICP = SIDPP = 650.
+  - Approved hand examples (10 bbl, SF 50): deviated Driller's peak 1,272 at ~4,579 stk (53.7 bbl),
+    max shoe 3,656 at ~2,616, trapped 42; deviated W&W peak 1,054 at ~4,484, max shoe 3,624 at
+    ~1,795, trapped 50. Horizontal Driller's casing flat 700 to ~1,792 stk, peak 1,211 at ~5,601
+    (48.0 bbl), shoe 5,877 the whole kill (shoe at the heel = BHP), DP 854, trapped 3; horizontal
+    W&W step-down 900 KOP / 868 heel / 901 bit (+SF), casing 700 -> 747 while gas in the lateral
+    (rounding 47 psi), peak 1,080 at ~5,551, max shoe 5,925 (margin 48 vs Driller's 96), trapped
+    50. Vertical tapered (0.2583, "suggests liquid"): max shoe 5,988 at start-up (fracture 6,026),
+    peak 1,888 (Driller's) / 1,865 (W&W) above MAASP 889 with the gas above the shoe.
+  - tests/reference_model.py: an INDEPENDENT second calculation (never imports kill_plot.py);
+    tests/test_kill_plot_reference.py requires every plotted point, peak, max shoe and end casing
+    to match it exactly on all 12 Driller's/W&W examples. Keep it independent.
 - Print: page 1 = well schematic (casing, shoe, open hole, string sections/crossovers, bit,
   KOP/EOB/heel) with KMW, ICP, FCP, MAMW, MAASP (original/after kill), volumes in bbl AND
   strokes. Page 2 = the table WITH an "Actual" column for observed values, plus the plot.
@@ -403,8 +438,8 @@ DONE: `kill_plot.py` + `tests/test_kill_plot.py` - Driller's and W&W, VERTICAL w
 DONE: SF / trapped-pressure bleed / flow check in the Driller's and W&W step lists, plus the
 kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/50, 821/0,
 829/0, SF < OB clamp, high-ICP W&W 61).
-NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
-first, (3) the volumetric plot.
+DONE: the web page (v1.1.0), and the deviated/horizontal kill plot (v1.2, see above).
+NEXT (user order): the volumetric plot (+ a schematic for volumetric sheets).
 
 Web page sub-phases (user-approved; stop after each). DONE: W1-W5, released v1.1.0. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
@@ -422,9 +457,8 @@ Schematic drawn straight, to scale by MD (not the well path); points at the same
 Volumetric sheets have no schematic yet. W5 as built: print layout (page 1 schematic, numbers,
 volumes, depths, entered data; page 2 plot + kill steps with Actual; W&W vertical spills its
 step-down schedule onto page 3), Print button, #well_id links, README link and v1.1.0 tag.
-NEXT (user order): (2) deviated/horizontal kill plot with a hand example first (also the
-vertical TAPERED plot hand example), (3) the volumetric plot (+ volumetric schematic). W4 page 1 well schematic +
-summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with the web page).
+v1.2 web: Pyodide runs in a module Web Worker (web/worker.js) so the page never freezes; the
+slowest sheet (horizontal W&W, ~22,000 forecast strokes incl. the Driller's comparison) takes ~3 s.
 
 ## Git / GitHub
 
