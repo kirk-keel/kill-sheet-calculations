@@ -4,24 +4,16 @@ Sections here are (name, capacity bbl/ft, length ft MD) - the name is only for
 printing. The calculator itself works with (capacity bbl/ft, length ft).
 Key points are (name, MD ft, TVD ft).
 
-Driller's, Wait and Weight and volumetric sheets are worked out by
+Driller's, Wait and Weight, volumetric and bullhead sheets are worked out by
 killsheet.kill_sheet (the web page uses the same module) and only printed here.
 """
 
-from killsheet.bullhead import (
-    bullhead_chart,
-    equipment_limit,
-    gas_migration_rate,
-    minimum_spm_to_beat_gas_migration,
-)
-from killsheet.depths import tvd_at_md
-from killsheet.formulas import kill_mud_weight, max_allowable_mud_weight
-from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, kill_sheet, volumetric_sheet, without_names  # noqa: F401 (examples import DRILLERS, WAIT_AND_WEIGHT from here)
-from killsheet.rounding import round_to_tenth, round_to_whole_number
+from killsheet.bullhead import equipment_limit
+from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, bullhead_sheet, kill_sheet, volumetric_sheet, without_names  # noqa: F401 (examples import DRILLERS, WAIT_AND_WEIGHT from here)
+from killsheet.rounding import round_to_whole_number
 from killsheet import reverse_circulation as reverse
 from killsheet.schedule import STEP
 from killsheet.strokes import surface_to_bit_strokes, total_length, total_volume
-from killsheet.volumetric import mud_gradient
 
 
 def print_kill_sheet(**well):
@@ -185,97 +177,53 @@ def print_volumetric_sheet(**well):
     print(f"  {sheet['end_message']}")
 
 
-def print_bullhead_sheet(
-    title,
-    bit_tvd_ft,
-    shoe_tvd_ft,
-    original_mud_weight_ppg,
-    lot_pressure_psi,
-    test_mud_weight_ppg,
-    sidpp_psi,
-    sicp_increase_psi_per_hr,
-    pump_output_bbl_per_stk,
-    pump_rate_bbl_per_min,
-    equipment_ratings,
-    drill_string,
-    annulus_bottom_up,
-    overdisplacement_bbl=0,
-    bit_md_ft=None,
-    shoe_md_ft=None,
-    key_points=(),
-):
-    """Bullhead sheet (drilling): annular shut, the same rate down the string and the backside.
-
-    drill_string: (name, capacity, length) top down. annulus_bottom_up: (name,
-    capacity, length) from the bottom up. equipment_ratings: (name, psi) - the
-    lowest rating or tested value is the equipment limit.
-
-    Vertical well: leave out bit_md_ft, shoe_md_ft and key_points (MD = TVD).
-    Deviated or horizontal well: give the bit and shoe MD and the key points as
-    (name, MD, TVD); the chart then shows MD and TVD for the kill fluid on each side.
-    """
-    string = without_names(drill_string)
-    annulus = without_names(annulus_bottom_up)
-    pump = pump_output_bbl_per_stk
-    kill_fluid = kill_mud_weight(sidpp_psi, bit_tvd_ft, original_mud_weight_ppg)
-    mamw = max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg)
-    limit_name, limit_psi = equipment_limit(equipment_ratings)
-
-    string_strokes = surface_to_bit_strokes(string, pump)
-    annulus_strokes = surface_to_bit_strokes(list(reversed(annulus)), pump)
-    spm = round_to_whole_number(pump_rate_bbl_per_min / pump)
-    migration = gas_migration_rate(sicp_increase_psi_per_hr, mud_gradient(original_mud_weight_ppg))
-    largest_annulus = max(capacity for capacity, _length in annulus)
-    minimum_spm = minimum_spm_to_beat_gas_migration(migration, largest_annulus, pump)
-
-    print(title)
+def print_bullhead_sheet(**well):
+    """Print the bullhead sheet (see killsheet.kill_sheet.bullhead_sheet)."""
+    sheet = bullhead_sheet(**well)
+    print(sheet["title"])
     print("=" * 52)
-    print(f"Kill fluid density           {kill_fluid:>8.1f} ppg  (rounded UP to the next 0.1)")
-    print(f"Max allowable mud weight     {mamw:>8.1f} ppg  (formation limit, from the LOT)")
-    print(f"Equipment limit              {limit_psi:>8,} psi  ({limit_name} - lowest rating / test)")
+    print(f"Kill fluid density           {sheet['kill_fluid_ppg']:>8.1f} ppg  (rounded UP to the next 0.1)")
+    print(f"Max allowable mud weight     {sheet['max_allowable_mud_weight_ppg']:>8.1f} ppg  (formation limit, from the LOT)")
+    print(f"Equipment limit              {sheet['equipment_limit_psi']:>8,} psi  "
+          f"({sheet['equipment_limit_name']} - lowest rating / test)")
     print()
-    print(f"Drill string, surface to bit {total_volume(string):>8.1f} bbl  {string_strokes:>6,} stks")
-    print(f"Annulus, surface to bottom   {total_volume(annulus):>8.1f} bbl  {annulus_strokes:>6,} stks  (kill point)")
-    print(f"Overdisplacement             {overdisplacement_bbl:>8.1f} bbl  (team's choice)")
-    past_bit_strokes = annulus_strokes - string_strokes
-    print(f"String keeps pumping after kill fluid reaches the bit: {past_bit_strokes:,} stks "
-          f"({round_to_tenth(past_bit_strokes * pump):.1f} bbl) out the bit by the kill point")
+    print(f"Drill string, surface to bit {sheet['string_volume_bbl']:>8.1f} bbl  {sheet['string_strokes']:>6,} stks")
+    print(f"Annulus, surface to bottom   {sheet['annulus_volume_bbl']:>8.1f} bbl  {sheet['annulus_strokes']:>6,} stks"
+          "  (kill point)")
+    print(f"Overdisplacement             {sheet['overdisplacement_bbl']:>8.1f} bbl  (team's choice)")
+    print(f"String keeps pumping after kill fluid reaches the bit: {sheet['past_bit_strokes']:,} stks "
+          f"({sheet['past_bit_bbl']:.1f} bbl) out the bit by the kill point")
     print()
-    print(f"Pump rate, SAME on both sides {pump_rate_bbl_per_min:.1f} bbl/min = {spm} spm each side")
-    print(f"Time to the kill point       {round_to_whole_number(annulus_strokes / spm):>8,} min  ({annulus_strokes:,} stks / {spm} spm)")
-    print(f"Gas migration                {migration:>8,} ft/hr  ({sicp_increase_psi_per_hr} psi/hr / "
-          f"{mud_gradient(original_mud_weight_ppg):.4f} psi/ft)")
-    print(f"Minimum rate to beat it      {minimum_spm:>8} spm  (largest annulus {largest_annulus:.4f} bbl/ft, rounded UP)")
-    if spm < minimum_spm:
+    spm = sheet["spm"]
+    print(f"Pump rate, SAME on both sides {sheet['pump_rate_bbl_per_min']:.1f} bbl/min = {spm} spm each side")
+    print(f"Time to the kill point       {sheet['minutes_to_kill_point']:>8,} min  "
+          f"({sheet['annulus_strokes']:,} stks / {spm} spm)")
+    print(f"Gas migration                {sheet['migration_ft_per_hr']:>8,} ft/hr  "
+          f"({sheet['sicp_increase_psi_per_hr']} psi/hr / {sheet['mud_gradient_psi_per_ft']:.4f} psi/ft)")
+    print(f"Minimum rate to beat it      {sheet['minimum_spm']:>8} spm  "
+          f"(largest annulus {sheet['largest_annulus_bbl_per_ft']:.4f} bbl/ft, rounded UP)")
+    if sheet["below_minimum_rate"]:
         print("  ! pump rate is BELOW the minimum to stay ahead of the gas")
     print()
-    print("Annular shut: pump kill fluid down the string AND the backside at the same rate.")
-    print("Pressure builds until injectivity is established, then falls as fluid is pushed")
-    print("away. The goal is injectivity, NOT breaking down the formation - stay below the")
-    print("max on both sides. Max = lower of the formation limit and the equipment limit.")
+    for line in sheet["procedure"]:
+        print(line)
     print()
-    bit_md = bit_tvd_ft if bit_md_ft is None else bit_md_ft
-    shoe_md = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
-    vertical = bit_md == bit_tvd_ft and not key_points
-    survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (bit_md, bit_tvd_ft)]
-    chart = bullhead_chart(original_mud_weight_ppg, kill_fluid, mamw, shoe_tvd_ft, string, annulus, pump,
-                           limit_psi, overdisplacement_bbl, shoe_md_ft=shoe_md, bit_tvd_ft=bit_tvd_ft,
-                           key_points=key_points)
+    vertical = sheet["vertical"]
     if vertical:
         print("  Strokes  Kill fluid MD ft    String max  Annulus max   Actual string  Actual annulus")
         print("    (each)   string  annulus         psi          psi             psi             psi")
     else:
         print("  Strokes  Kill fluid, string  Kill fluid, annulus  String  Annulus   Actual   Actual")
         print("    (each)     MD ft   TVD ft      MD ft   TVD ft  max psi  max psi   string  annulus")
-    for row in chart:
-        label = "" if row.label == "step" else f"  <- {row.label}"
+    for row in sheet["chart"]:
+        label = "" if row["label"] == "step" else f"  <- {row['label']}"
         if vertical:
-            print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>7,}  {row.annulus_kill_md_ft:>7,}"
-                  f"  {row.string_max_psi:>10,}  {row.annulus_max_psi:>11,}   ____________    ____________{label}")
+            print(f"  {row['strokes']:>7,}  {row['string_kill_md_ft']:>7,}  {row['annulus_kill_md_ft']:>7,}"
+                  f"  {row['string_max_psi']:>10,}  {row['annulus_max_psi']:>11,}   ____________    ____________{label}")
         else:
-            print(f"  {row.strokes:>7,}  {row.string_kill_md_ft:>8,} {tvd_at_md(row.string_kill_md_ft, survey):>8,}"
-                  f"   {row.annulus_kill_md_ft:>8,} {tvd_at_md(row.annulus_kill_md_ft, survey):>8,}"
-                  f"  {row.string_max_psi:>7,}  {row.annulus_max_psi:>7,}   ______   ______{label}")
+            print(f"  {row['strokes']:>7,}  {row['string_kill_md_ft']:>8,} {row['string_kill_tvd_ft']:>8,}"
+                  f"   {row['annulus_kill_md_ft']:>8,} {row['annulus_kill_tvd_ft']:>8,}"
+                  f"  {row['string_max_psi']:>7,}  {row['annulus_max_psi']:>7,}   ______   ______{label}")
 
 
 def print_reverse_circulation_sheet(

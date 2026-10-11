@@ -11,6 +11,12 @@ display. Key points are (name, MD ft, TVD ft). Results are plain dicts and
 lists so the web page can read them as JSON.
 """
 
+from killsheet.bullhead import (
+    bullhead_chart,
+    equipment_limit,
+    gas_migration_rate,
+    minimum_spm_to_beat_gas_migration,
+)
 from killsheet.depths import tvd_at_md
 from killsheet.drillers import drillers_method
 from killsheet.formulas import (
@@ -30,7 +36,7 @@ from killsheet.kill_plot import (
     shoe_margin_warning,
     wait_and_weight_kill_plot,
 )
-from killsheet.rounding import round_to_tenth
+from killsheet.rounding import round_to_tenth, round_to_whole_number
 from killsheet.lubricate_and_bleed import (
     cycles_past_kop,
     end_of_lubricate_and_bleed,
@@ -47,6 +53,7 @@ from killsheet.strokes import (
     strokes_for_volume,
     strokes_to_length,
     surface_to_bit_strokes,
+    total_length,
     total_volume,
 )
 from killsheet.volumetric import (
@@ -598,5 +605,111 @@ def volumetric_sheet(
             "string": pipe,
             "pipe_bottom_tvd_ft": None if pipe_bottom_md_ft is None else tvd_at_md(pipe_bottom_md_ft, survey),
             "pipe_on_bottom": position == ON_BOTTOM,
+        },
+    }
+
+
+BULLHEAD_PROCEDURE = (
+    "Annular shut: pump kill fluid down the string AND the backside at the same rate.",
+    "Pressure builds until injectivity is established, then falls as fluid is pushed",
+    "away. The goal is injectivity, NOT breaking down the formation - stay below the",
+    "max on both sides. Max = lower of the formation limit and the equipment limit.",
+)
+
+
+def bullhead_sheet(
+    title,
+    bit_tvd_ft,
+    shoe_tvd_ft,
+    original_mud_weight_ppg,
+    lot_pressure_psi,
+    test_mud_weight_ppg,
+    sidpp_psi,
+    sicp_increase_psi_per_hr,
+    pump_output_bbl_per_stk,
+    pump_rate_bbl_per_min,
+    equipment_ratings,
+    drill_string,
+    annulus_bottom_up,
+    overdisplacement_bbl=0,
+    bit_md_ft=None,
+    shoe_md_ft=None,
+    key_points=(),
+):
+    """Bullhead sheet (drilling): annular shut, the same rate down the string and the backside.
+
+    drill_string: (name, capacity, length) top down. annulus_bottom_up: (name,
+    capacity, length) from the bottom up. equipment_ratings: (name, psi) - the
+    lowest rating or tested value is the equipment limit.
+
+    Vertical well: leave out bit_md_ft, shoe_md_ft and key_points (MD = TVD).
+    Deviated or horizontal well: give the bit and shoe MD and the key points as
+    (name, MD, TVD); the chart then shows MD and TVD for the kill fluid on each side.
+    """
+    string = without_names(drill_string)
+    annulus = without_names(annulus_bottom_up)
+    pump = pump_output_bbl_per_stk
+    bit_md = bit_tvd_ft if bit_md_ft is None else bit_md_ft
+    shoe_md = shoe_tvd_ft if shoe_md_ft is None else shoe_md_ft
+    for name, sections in (("Drill string", string), ("Annulus", annulus)):
+        if total_length(sections) != bit_md:
+            raise ValueError(f"{name} sections add up to {total_length(sections):,} ft MD "
+                             f"but should be {bit_md:,} ft")
+    kill_fluid = kill_mud_weight(sidpp_psi, bit_tvd_ft, original_mud_weight_ppg)
+    mamw = max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg)
+    limit_name, limit_psi = equipment_limit(equipment_ratings)
+
+    string_strokes = surface_to_bit_strokes(string, pump)
+    annulus_strokes = surface_to_bit_strokes(list(reversed(annulus)), pump)
+    spm = round_to_whole_number(pump_rate_bbl_per_min / pump)
+    gradient = mud_gradient(original_mud_weight_ppg)
+    migration = gas_migration_rate(sicp_increase_psi_per_hr, gradient)
+    largest_annulus = max(capacity for capacity, _length in annulus)
+    minimum_spm = minimum_spm_to_beat_gas_migration(migration, largest_annulus, pump)
+    past_bit_strokes = annulus_strokes - string_strokes
+
+    survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (bit_md, bit_tvd_ft)]
+    chart = bullhead_chart(original_mud_weight_ppg, kill_fluid, mamw, shoe_tvd_ft, string, annulus, pump,
+                           limit_psi, overdisplacement_bbl, shoe_md_ft=shoe_md, bit_tvd_ft=bit_tvd_ft,
+                           key_points=key_points)
+    return {
+        "title": title,
+        "kill_fluid_ppg": kill_fluid,
+        "max_allowable_mud_weight_ppg": mamw,
+        "equipment_limit_name": limit_name,
+        "equipment_limit_psi": limit_psi,
+        "string_volume_bbl": total_volume(string),
+        "string_strokes": string_strokes,
+        "annulus_volume_bbl": total_volume(annulus),
+        "annulus_strokes": annulus_strokes,
+        "overdisplacement_bbl": overdisplacement_bbl,
+        "past_bit_strokes": past_bit_strokes,
+        "past_bit_bbl": round_to_tenth(past_bit_strokes * pump),
+        "pump_rate_bbl_per_min": pump_rate_bbl_per_min,
+        "spm": spm,
+        "minutes_to_kill_point": round_to_whole_number(annulus_strokes / spm),
+        "sicp_increase_psi_per_hr": sicp_increase_psi_per_hr,
+        "mud_gradient_psi_per_ft": gradient,
+        "migration_ft_per_hr": migration,
+        "largest_annulus_bbl_per_ft": largest_annulus,
+        "minimum_spm": minimum_spm,
+        "below_minimum_rate": spm < minimum_spm,
+        "procedure": list(BULLHEAD_PROCEDURE),
+        "vertical": bit_md == bit_tvd_ft and not key_points,
+        "chart": [{
+            "strokes": row.strokes,
+            "string_kill_md_ft": row.string_kill_md_ft,
+            "string_kill_tvd_ft": tvd_at_md(row.string_kill_md_ft, survey),
+            "annulus_kill_md_ft": row.annulus_kill_md_ft,
+            "annulus_kill_tvd_ft": tvd_at_md(row.annulus_kill_md_ft, survey),
+            "string_max_psi": row.string_max_psi,
+            "annulus_max_psi": row.annulus_max_psi,
+            "label": row.label,
+        } for row in chart],
+        "schematic": {
+            "bit_md_ft": bit_md, "bit_tvd_ft": bit_tvd_ft, "shoe_md_ft": shoe_md, "shoe_tvd_ft": shoe_tvd_ft,
+            "key_points": [{"name": name, "md_ft": md, "tvd_ft": tvd} for name, md, tvd in key_points],
+            "string": section_depths(drill_string),
+            "annulus": section_depths(annulus_bottom_up, bit_md, down=False),
         },
     }

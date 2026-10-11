@@ -9,16 +9,17 @@ so the web page and the printed examples always start from the same wells.
 import importlib
 import json
 
-from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, kill_sheet, volumetric_sheet
+from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, bullhead_sheet, kill_sheet, volumetric_sheet
 from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS
 from killsheet.volumetric import AVERAGE, LONGEST, SMALLEST
 from killsheet.volumetric_model import ANNULUS_AT_THE_GAS
 
 KILL_SHEET = "kill sheet"
 VOLUMETRIC = "volumetric"
+BULLHEAD = "bullhead"
 
 # The example wells offered in the dropdown: (example file, label).
-# Bullheading and reverse circulation come in a later web release.
+# Reverse circulation comes in a later web release.
 EXAMPLE_WELLS = [
     ("example_well", "Driller's - vertical, untapered (baseline)"),
     ("tapered_well", "Driller's - vertical, tapered"),
@@ -44,11 +45,17 @@ EXAMPLE_WELLS = [
     ("volumetric_deviated_tapered_well", "Volumetric + L&B - deviated, pipe on bottom, tapered"),
     ("volumetric_horizontal_well", "Volumetric + L&B - horizontal, pipe on bottom, untapered"),
     ("volumetric_horizontal_tapered_well", "Volumetric + L&B - horizontal, pipe on bottom, tapered"),
+    ("bullhead_well", "Bullheading - vertical, untapered"),
+    ("bullhead_tapered_well", "Bullheading - vertical, tapered"),
+    ("bullhead_deviated_well", "Bullheading - deviated, untapered"),
+    ("bullhead_deviated_tapered_well", "Bullheading - deviated, tapered"),
+    ("bullhead_horizontal_well", "Bullheading - horizontal, untapered"),
+    ("bullhead_horizontal_tapered_well", "Bullheading - horizontal, tapered"),
 ]
 
 # The input form for each kind of sheet: (input name, label, type, optional).
 # Types: text, number (with its unit), a list of choices, yesno, sections
-# (name, capacity, length), points (name, MD, TVD) or numbers (a list of readings).
+# (name, capacity, length), points (name, MD, TVD), ratings (name, psi) or numbers (a list of readings).
 # Optional inputs may be left blank: a blank MD means a vertical well (MD = TVD).
 WW = "Wait and Weight only"
 FORMS = {
@@ -103,13 +110,35 @@ FORMS = {
         ("sicp_gas_at_surface_psi", "Reading: SICP with gas at surface", "psi", False),
         ("bbl_pumped_each_cycle", "Readings: bbl pumped, each lubricate and bleed cycle", "numbers", False),
     ],
+    BULLHEAD: [
+        ("title", "Title", "text", False),
+        ("bit_tvd_ft", "Bit TVD", "ft", False),
+        ("bit_md_ft", "Bit MD (blank = vertical)", "ft", True),
+        ("shoe_tvd_ft", "Shoe TVD", "ft", False),
+        ("shoe_md_ft", "Shoe MD (blank = vertical)", "ft", True),
+        ("original_mud_weight_ppg", "Original mud weight", "ppg", False),
+        ("lot_pressure_psi", "Leak-off test pressure", "psi", False),
+        ("test_mud_weight_ppg", "Leak-off test mud weight", "ppg", False),
+        ("sidpp_psi", "SIDPP", "psi", False),
+        ("sicp_increase_psi_per_hr", "SICP increase over the last hour (gas migration)", "psi/hr", False),
+        ("pump_output_bbl_per_stk", "Pump output", "bbl/stk", False),
+        ("pump_rate_bbl_per_min", "Pump rate, the same on both sides", "bbl/min", False),
+        ("overdisplacement_bbl", "Overdisplacement, team's choice (0 if none)", "bbl", True),
+        ("equipment_ratings", "Equipment ratings / tested values (the lowest is the limit)", "ratings", False),
+        ("key_points", "Key points (KOP, end of build, heel)", "points", True),
+        ("drill_string", "Drill string, top down", "sections", False),
+        ("annulus_bottom_up", "Annulus, bit up", "sections", False),
+    ],
 }
 
 
 def well_inputs(example):
     """The WELL data of one example file, with the kind of sheet it is."""
     well = importlib.import_module(example).WELL
-    kind = VOLUMETRIC if "annulus_bottom_up" in well else KILL_SHEET
+    if "sicp_increase_psi_per_hr" in well:
+        kind = BULLHEAD
+    else:
+        kind = VOLUMETRIC if "annulus_bottom_up" in well else KILL_SHEET
     return kind, well
 
 
@@ -125,8 +154,9 @@ def example_wells():
 def calculate(kind, inputs_json):
     """Work out the sheet from the page's inputs. Returns JSON: the sheet, or the error."""
     inputs = json.loads(inputs_json)
+    sheets = {KILL_SHEET: kill_sheet, VOLUMETRIC: volumetric_sheet, BULLHEAD: bullhead_sheet}
     try:
-        sheet = volumetric_sheet(**inputs) if kind == VOLUMETRIC else kill_sheet(**inputs)
+        sheet = sheets[kind](**inputs)
     except (ValueError, TypeError, KeyError, ZeroDivisionError, IndexError) as error:
         return json.dumps({"error": str(error)})
     return json.dumps({"kind": kind, "sheet": sheet})

@@ -32,7 +32,7 @@ baseline must keep working and keep its tests.
   - `volumetric_model.py` — volumetric forecast: single bubble, bleed at the gas, hold correction,
     shoe tiers, Pf, wording (checked against tests/reference_model.py reference_volumetric)
   - `volumetric_plot.py` — volumetric and lubricate and bleed charts (pressure vs bbl), pipe position
-  - `kill_sheet.py` — the whole Driller's / W&W / volumetric sheet as plain dicts (calls the
+  - `kill_sheet.py` — the whole Driller's / W&W / volumetric / bullhead sheet as plain dicts (calls the
     modules above, calculates nothing new); the printer AND the web page draw from it
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -570,7 +570,7 @@ python -m http.server --directory _site   # try it at http://localhost:8000
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each
 example file is just the well data: `WELL = dict(...)`, printed under
 `if __name__ == "__main__":`. The web page reads the same WELL data (web/app.py
-EXAMPLE_WELLS lists the 22 Driller's / W&W / volumetric wells in the dropdown; FORMS
+EXAMPLE_WELLS lists the 30 Driller's / W&W / volumetric / bullhead wells in the dropdown; FORMS
 lists every input). After any printer/sheet change, every example's output must be
 byte-identical unless the user approved the change. Sections in the examples are
 `(name, capacity, length)`; the name is for printing only.

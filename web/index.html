@@ -31,6 +31,7 @@
   button { cursor: pointer; background: var(--head); }
   .layout { display: grid; gap: 20px; grid-template-columns: 1fr; }
   @media (min-width: 1100px) { .layout { grid-template-columns: 400px 1fr; align-items: start; } }
+  #results { min-width: 0; }
   #inputs { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
   .field { display: grid; grid-template-columns: 1fr 120px 52px; gap: 6px; align-items: center; margin: 4px 0; }
   .field label { font-size: 0.92em; }
@@ -185,15 +186,16 @@
       } else if (type === "numbers") {
         html += `<div class="field wide"><label for="f-${name}">${esc(label)} <span class="unit">(comma separated)</span></label>` +
                 `<input id="f-${name}" data-name="${name}" data-type="numbers" value="${esc((value ?? []).join(", "))}"></div>`;
-      } else if (type === "sections" || type === "points") {
-        const heads = type === "sections" ? ["Name", "Capacity bbl/ft", "Length ft"] : ["Name", "MD ft", "TVD ft"];
+      } else if (type === "sections" || type === "points" || type === "ratings") {
+        const heads = {sections: ["Name", "Capacity bbl/ft", "Length ft"], points: ["Name", "MD ft", "TVD ft"],
+                       ratings: ["Equipment", "psi"]}[type];
         const rows = (value ?? []).map((row, i) =>
           `<tr>${row.map((cell, j) => `<td><input data-name="${name}" data-type="${type}" data-row="${i}" data-col="${j}"` +
             ` ${j ? 'inputmode="decimal"' : ""} aria-label="${esc(heads[j])}" value="${esc(cell)}"></td>`).join("")}` +
           `<td><button type="button" data-remove="${name}" data-row="${i}" aria-label="Remove row">&times;</button></td></tr>`).join("");
         html += `<div class="group"><div class="group-title">${esc(label)}</div>` +
                 `<table class="rows"><tr>${heads.map(h => `<th>${h}</th>`).join("")}<th></th></tr>${rows}</table>` +
-                `<button type="button" data-add="${name}" data-cols="3">+ add row</button></div>`;
+                `<button type="button" data-add="${name}" data-cols="${heads.length}">+ add row</button></div>`;
       } else {
         html += `<div class="field"><label for="f-${name}">${esc(label)}</label>` +
                 `<input id="f-${name}" data-name="${name}" data-type="number" inputmode="decimal" value="${esc(value ?? "")}">` +
@@ -228,7 +230,7 @@
       if (type !== "text" && type !== "yesno" && !Array.isArray(type) && !optional && (value == null || value === "")) {
         return `Enter ${label}.`;
       }
-      const numbers = type === "numbers" ? value : (type === "sections" || type === "points")
+      const numbers = type === "numbers" ? value : (type === "sections" || type === "points" || type === "ratings")
         ? (value ?? []).flatMap(row => row.slice(1)) : [value];
       if (type !== "text" && type !== "yesno" && !Array.isArray(type) && numbers.some(n => n != null && !Number.isFinite(n))) {
         return `${label}: enter numbers only.`;
@@ -250,13 +252,14 @@
       let shown;
       if (type === "sections") shown = value.map(r => `${r[0]}: ${r[1]} x ${int(r[2])} ft`).join("<br>");
       else if (type === "points") shown = value.map(r => `${r[0]} ${int(r[1])} MD / ${int(r[2])} TVD`).join("<br>");
+      else if (type === "ratings") shown = value.map(r => `${r[0]}: ${int(r[1])} psi`).join("<br>");
       else if (type === "numbers") shown = value.join(", ");
       else if (type === "yesno") shown = value ? "Yes" : "No";
       else if (typeof value === "number") shown = `${value.toLocaleString("en-US")} ${type}`;
       else shown = value;
-      const wide = type === "sections" || type === "points" || type === "numbers";
-      rows.push(`<div class="${wide ? "wide" : ""}"><span class="note">${esc(label)}</span><br>` +
-                `${type === "sections" || type === "points" ? shown.split("<br>").map(esc).join("<br>") : esc(shown)}</div>`);
+      const listed = type === "sections" || type === "points" || type === "ratings";
+      rows.push(`<div class="${listed || type === "numbers" ? "wide" : ""}"><span class="note">${esc(label)}</span><br>` +
+                `${listed ? shown.split("<br>").map(esc).join("<br>") : esc(shown)}</div>`);
     }
     return `<div class="print-only"><h3>Well and kick data (as entered)</h3><div class="inputs-grid">${rows.join("")}</div></div>`;
   }
@@ -431,6 +434,48 @@
               `${s.passed_kop ? '<span class="flag">PASSED KOP</span>' : "stays above KOP"}</p>`;
     }
     html += `<div class="box ${s.remaining_underbalance_psi > 10 ? "error" : "warn"}">${esc(s.end_message)}</div>`;
+    return html;
+  }
+
+  function drawBullhead(s) {
+    const numbers = summary([
+      ["Kill fluid density", dec(s.kill_fluid_ppg, 1), "ppg (rounded UP to the next 0.1)"],
+      ["Max allowable mud weight", dec(s.max_allowable_mud_weight_ppg, 1), "ppg (formation limit, from the LOT)"],
+      ["Equipment limit", int(s.equipment_limit_psi), `psi (${esc(s.equipment_limit_name)} - lowest rating / test)`],
+      ["Pump rate, SAME on both sides", dec(s.pump_rate_bbl_per_min, 1), `bbl/min = ${s.spm} spm each side`],
+      ["Time to the kill point", int(s.minutes_to_kill_point), `min (${int(s.annulus_strokes)} stks / ${s.spm} spm)`],
+      ["Gas migration", int(s.migration_ft_per_hr),
+       `ft/hr (${s.sicp_increase_psi_per_hr} psi/hr / ${dec(s.mud_gradient_psi_per_ft, 4)} psi/ft)`],
+      ["Minimum rate to beat it", s.minimum_spm,
+       `spm (largest annulus ${dec(s.largest_annulus_bbl_per_ft, 4)} bbl/ft, rounded UP)`],
+    ]);
+    const volumes = table([["Volume"], ["bbl", "num"], ["Strokes", "num"]], [
+      `<tr><td>Drill string, surface to bit</td><td class="num">${dec(s.string_volume_bbl, 1)}</td>` +
+        `<td class="num">${int(s.string_strokes)}</td></tr>`,
+      `<tr><td>Annulus, surface to bottom (kill point)</td><td class="num">${dec(s.annulus_volume_bbl, 1)}</td>` +
+        `<td class="num">${int(s.annulus_strokes)}</td></tr>`,
+      `<tr><td>Overdisplacement (team's choice)</td><td class="num">${dec(s.overdisplacement_bbl, 1)}</td><td></td></tr>`,
+    ]);
+    let html = `<h2>${esc(s.title)}</h2><div class="page1"><div>${drawSchematic(s.schematic)}</div>` +
+               `<div>${numbers}` +
+               (s.below_minimum_rate ? `<div class="box error">Pump rate is BELOW the minimum to stay ahead of the gas.</div>` : "") +
+               `<h3>Volumes</h3>${volumes}<p class="note">String keeps pumping after kill fluid reaches the bit: ` +
+               `${int(s.past_bit_strokes)} stks (${dec(s.past_bit_bbl, 1)} bbl) out the bit by the kill point.</p></div></div>`;
+    html += inputsTable();
+    html += `<div class="page-break"></div>`;               // printed page 2: the chart with the Actual columns
+    html += `<h3>Bullhead chart - the same strokes down both sides</h3><div class="box warn">${esc(s.procedure.join(" "))}</div>`;
+    const heads = s.vertical
+      ? [["Strokes (each)", "num"], ["Kill fluid MD ft, string", "num"], ["Kill fluid MD ft, annulus", "num"]]
+      : [["Strokes (each)", "num"], ["String kill fluid MD ft", "num"], ["TVD ft", "num"],
+         ["Annulus kill fluid MD ft", "num"], ["TVD ft", "num"]];
+    html += table([...heads, ["String max psi", "num"], ["Annulus max psi", "num"], ["Actual string"], ["Actual annulus"], [""]],
+      s.chart.map((r, i) => `<tr><td class="num">${int(r.strokes)}</td><td class="num">${int(r.string_kill_md_ft)}</td>` +
+        (s.vertical ? "" : `<td class="num">${int(r.string_kill_tvd_ft)}</td>`) +
+        `<td class="num">${int(r.annulus_kill_md_ft)}</td>` +
+        (s.vertical ? "" : `<td class="num">${int(r.annulus_kill_tvd_ft)}</td>`) +
+        `<td class="num"><b>${int(r.string_max_psi)}</b></td><td class="num"><b>${int(r.annulus_max_psi)}</b></td>` +
+        `${actualCell("string" + i)}${actualCell("annulus" + i)}` +
+        `<td class="note">${r.label === "step" ? "" : esc(r.label)}</td></tr>`));
     return html;
   }
 
@@ -678,7 +723,8 @@
       results.innerHTML = `<div class="box error">The calculator refused these inputs: ${esc(answer.error)}</div>`;
       return;
     }
-    results.innerHTML = answer.kind === "volumetric" ? drawVolumetric(answer.sheet) : drawKillSheet(answer.sheet);
+    const draw = {volumetric: drawVolumetric, bullhead: drawBullhead}[answer.kind] ?? drawKillSheet;
+    results.innerHTML = draw(answer.sheet);
   }
 
   // ---------- Wiring ----------
