@@ -404,13 +404,23 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
 first, (3) the volumetric plot.
 
+Web page sub-phases (user-approved; stop after each): W1 plumbing - Pyodide page, Pages
+workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
+W2 example wells as a tested data module + dropdown + editable inputs + tables with an
+"Actual" column (Driller's, W&W, volumetric + L&B). W3 kill plot SVG - VERTICAL wells only
+(user OK); others say "plot coming in a later release". W4 page 1 well schematic +
+summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with the web page).
+
 ## Git / GitHub
 
 - Repo: https://github.com/kirk-keel/kill-sheet-calculations (public, GitHub account `kirk-keel`)
 - Default branch: `main`. Commit at the end of each phase once the user approves.
 - License: MIT (`LICENSE`), copyright Kirk Keel.
 - CI: `.github/workflows/tests.yml` runs pytest and every `examples/*_well.py` on Python
-  3.10–3.13 on every push and PR.
+  3.10–3.14 on every push and PR (3.14 = Pyodide v314.0.7, the browser's Python).
+- Web page: `.github/workflows/pages.yml` runs after Tests passes on a push to main
+  (workflow_run), builds `web/` with `web/build_site.py` into `_site/` (index.html, app.py,
+  killsheet.zip of src/killsheet) and publishes it to GitHub Pages.
 - Release tags: v0.1, v0.1.1, v0.2 ... v0.19, v1.0.0 (surface stack complete). Minor
   number for each new capability, patch number for fixes.
 
@@ -425,6 +435,8 @@ python examples/deviated_well.py   # deviated, untapered
 python examples/horizontal_well.py # horizontal, untapered
 python examples/deviated_tapered_well.py    # deviated, tapered
 python examples/horizontal_tapered_well.py  # horizontal, tapered
+python web/build_site.py               # build the web page into _site/
+python -m http.server --directory _site   # try it at http://localhost:8000
 ```
 
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each

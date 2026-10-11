@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kill Sheet Calculator</title>
+<style>
+  :root { --ink: #1b1f24; --muted: #5b6470; --line: #d6dbe1; --head: #eef1f4; --bg: #ffffff; --link: #0b5cad; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #e6e9ed; --muted: #9aa4b0; --line: #3a414a; --head: #23282e; --bg: #16191d; --link: #7cb7ff; }
+  }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+  .muted { color: var(--muted); }
+  a { color: var(--link); }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: var(--head); }
+  td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .summary { max-width: 460px; }
+  .note { color: var(--muted); font-size: 0.9em; }
+  .wrap { overflow-x: auto; }
+  #status { padding: 12px 0; }
+  #status.error { color: #c0392b; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Kill Sheet Calculator</h1>
+  <p class="muted">Free kill sheet calculator for oilfield hands. Oilfield units, IADC rounding rules.
+    The calculations run in your browser using the same tested Python code as the
+    <a href="https://github.com/kirk-keel/kill-sheet-calculations">project on GitHub</a>.</p>
+  <div id="status">Loading the calculator (a few seconds the first time)...</div>
+  <div id="sheet"></div>
+</main>
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
+<script>
+  // The page only draws: every number comes from the killsheet Python package.
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  }
+
+  function drawSheet(sheet) {
+    const summaryRows = sheet.summary.map(([name, value, unit]) =>
+      `<tr><td>${escapeHtml(name)}</td><td class="num">${escapeHtml(value)}</td><td>${escapeHtml(unit)}</td></tr>`
+    ).join("");
+    let circulation = null;
+    const stepRows = sheet.steps.map(step => {
+      let head = "";
+      if (step.circulation !== circulation) {
+        circulation = step.circulation;
+        head = `<tr><th colspan="5">${escapeHtml(circulation)}</th></tr>`;
+      }
+      // No pressure: held "constant" on shut-down, blank for bleed / flow check (as printed)
+      const psi = step.hold_psi !== null ? step.hold_psi.toLocaleString("en-US")
+        : step.stage === "shut-down" ? "constant" : "";
+      const stks = step.strokes === null ? "" : step.strokes.toLocaleString("en-US");
+      return head + `<tr><td>${escapeHtml(step.stage)}</td><td>${escapeHtml(step.gauge)}</td>` +
+        `<td class="num">${escapeHtml(psi)}</td><td class="num">${escapeHtml(stks)}</td>` +
+        `<td class="note">${escapeHtml(step.note)}</td></tr>`;
+    }).join("");
+    document.getElementById("sheet").innerHTML = `
+      <h2>${escapeHtml(sheet.title)}</h2>
+      <table class="summary">${summaryRows}</table>
+      <h2>${escapeHtml(sheet.method)}</h2>
+      <div class="wrap"><table>
+        <tr><th>Stage</th><th>Gauge</th><th>psi</th><th>Strokes</th><th>Note</th></tr>
+        ${stepRows}
+      </table></div>`;
+  }
+
+  async function main() {
+    const status = document.getElementById("status");
+    try {
+      const pyodide = await loadPyodide();
+      const zip = await (await fetch("killsheet.zip")).arrayBuffer();
+      pyodide.unpackArchive(zip, "zip");                  // the killsheet package
+      const app = await (await fetch("app.py")).text();
+      pyodide.runPython(app);
+      drawSheet(JSON.parse(pyodide.runPython("baseline_drillers_sheet()")));
+      status.remove();
+    } catch (error) {
+      status.className = "error";
+      status.textContent = "The calculator failed to load: " + error;
+    }
+  }
+  main();
+</script>
+</body>
+</html>

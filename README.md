@@ -711,13 +711,18 @@ examples/
   deviated_tapered_well.py     deviated, tapered string
   horizontal_tapered_well.py   horizontal, tapered string
   kill_sheet_printer.py  prints a kill sheet (shared by both examples)
+web/
+  index.html     the web page (draws the numbers, calculates nothing)
+  app.py         runs the killsheet package in the browser (Pyodide)
+  build_site.py  builds the page into _site/
 .github/workflows/tests.yml   runs the tests on every push
+.github/workflows/pages.yml   publishes the web page, only after the tests pass
 ```
 
 ## Testing
 
 The tests and every example kill sheet run automatically on GitHub on every push,
-on Python 3.10–3.13. The badge at the top of this page shows whether they're passing.
+on Python 3.10–3.14 (3.14 is the Python the web page runs in the browser). The badge at the top of this page shows whether they're passing.
 
 ## Disclaimer
 
