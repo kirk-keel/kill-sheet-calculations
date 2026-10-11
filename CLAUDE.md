@@ -29,6 +29,9 @@ baseline must keep working and keep its tests.
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
   - `kill_plot.py` — kill plot: single-bubble gas model, forecast DP and casing lines, shoe check
     (vertical, deviated, horizontal; checked against tests/reference_model.py)
+  - `volumetric_model.py` — volumetric forecast: single bubble, bleed at the gas, hold correction,
+    shoe tiers, Pf, wording (checked against tests/reference_model.py reference_volumetric)
+  - `volumetric_plot.py` — volumetric and lubricate and bleed charts (pressure vs bbl), pipe position
   - `kill_sheet.py` — the whole Driller's / W&W / volumetric sheet as plain dicts (calls the
     modules above, calculates nothing new); the printer AND the web page draw from it
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
@@ -125,9 +128,8 @@ DEPTH of the kill mud, never a straight line against strokes:
 - Safety margin and working pressure are chosen by the team killing the well (inputs,
   no defaults).
 - Volumetric bleed per cycle = (working pressure / mud gradient) x annular capacity
-  (IADC #35), rounded DOWN to 0.1 bbl. Annular capacity is the team's choice (no single
-  industry standard); DEFAULT = SMALLEST annulus the gas passes through (least bleed).
-  Average (total volume / length, 4 places) and longest are shown for comparison.
+  (IADC #35), rounded DOWN to 0.1 bbl. v1.3 DEFAULT = "annulus at the gas" (see the v1.3 rules
+  below); smallest / average / longest stay selectable team choices (same forecast + warnings).
 - First hold = SICP + safety margin + working pressure; each cycle adds the working
   pressure. Above MAASP: WARN AND CONTINUE (pressure keeps rising as gas comes up).
 - Gas at surface = SICP rises no more than 10 psi over a 15 minute wait. The table is
@@ -135,7 +137,8 @@ DEPTH of the kill mud, never a straight line against strokes:
 - Lubricate and bleed only once gas is at surface: kill weight mud, annulus AT SURFACE.
   Pump until casing rises by the working pressure (the pressure decides the volume);
   bleed back to the pre-pump pressure minus bbl x KWM gradient / surface capacity
-  (rounded DOWN). Repeat until casing = 0 (hydrostatic control regained).
+  (rounded DOWN). v1.3: STOP when bbl lubricated = gas volume at surface (pit gain + bbl bled,
+  from the readings) - see the v1.3 rules below (casing is NOT assumed to reach 0).
 - No dedicated IADC lubricate and bleed formula — built from #12, #13, #14. Say so.
 - Deviated/horizontal (user rules, v0.11): volume bled stays the VERTICAL IADC #35
   volume (bleeds the least); the angle-corrected volume
@@ -147,6 +150,64 @@ DEPTH of the kill mud, never a straight line against strokes:
   passes KOP (deepest key point with TVD = MD) — each bbl is then worth less psi.
 - Example sheets: one per well type for pipe on bottom is fine; every situation must be
   covered in the tests.
+
+**Volumetric v1.3 - single-bubble forecast** (user-approved, worked cycle by cycle; code in
+`volumetric_model.py`, oracle `tests/reference_model.py` reference_volumetric, tests
+`tests/test_volumetric_model.py`):
+- New inputs: pit_gain_bbl (REQUIRED), sidpp_psi (Pf from SIDPP when given; otherwise Pf
+  ESTIMATED from SICP: "estimated: assumes influx at bottom, 0.1 psi/ft, no migration before the
+  SICP reading"). kill_mud_weight_ppg = the mud LUBRICATED (original 10.4 for a swabbed kick).
+- Gas position: Boyle at the top of the bubble, P = P0 x pit / (pit + bbl bled); gas top TVD =
+  (P - casing) / mud gradient; positions by MD (capacities), pressures by TVD. Influx in the lateral:
+  bubble starts at the heel, 0.1 psi/ft - and the bleed PATH starts there too (the bubble's bottom
+  at the heel, never the DC annulus at the bit).
+- Bleed per cycle on the SMALLEST annulus the gas touches anywhere along its PATH (end of the last
+  bleed or shut-in, through the end of this bleed); the largest capacity that satisfies it. Any error
+  = under-bleed. Sheet prints a bleed table by annulus (capacity, bbl per cycle, from cycle).
+- Holds: "Standard hold" (IADC: SICP + SF + n x Pw) and "Hold to use" side by side, with the reason and
+  a Tier column (legend printed; tier 0 = standard hold, no correction). After any shoe-limited cycle
+  (tier 2-4) the Standard is RE-BASED: previous hold used + Pw ("Standard re-based after shoe-limited
+  cycle N"), so a correction is always >= 0 against the column it sits next to.
+  Hold to use raised (never lowered for geometry) until the forecast BHP through the coming bleed is
+  >= Pf + SF (gas gaining vertical height: narrower annulus / build) - "+X psi: gas will gain vertical
+  height during this bleed (narrower annulus / build section)." Includes the first hold.
+- Shoe tiers on every hold: 0 standard / 1 corrected, shoe <= fracture; 2 shoe-limited, BHP >= Pf+SF;
+  3 shoe-limited, Pf <= BHP < Pf+SF: "Cycle N: hold limited by the shoe. SF reduced from SF to x psi.
+  BHP still above Pf."; 4 shoe-limited BHP < Pf: "SUPERVISOR DECISION, cycle N: hold A psi keeps BHP >=
+  Pf + x but puts the shoe y psi over fracture. Hold B psi keeps the shoe at fracture but BHP z psi under
+  Pf (influx). Constant-BHP doctrine favors A." (A printed). The shoe-limited hold is stepped down
+  until the forecast shoe really is <= fracture.
+- shoe_margin_psi (team's choice, default 0; examples 0): the shoe tiers and the pre-check use
+  fracture - shoe margin as the shoe limit; printed when nonzero (a LOT isn't that precise).
+- Pre-check: SF + Pw >= MAASP - SICP - shoe margin: "Shoe margin X psi is less than SF + Pw Y. Volumetric with these
+  margins will exceed fracture. Reduce SF/Pw or consider bullheading."
+- MAASP by gas position: gas below shoe "ABOVE MAASP, gas below shoe, shoe overpressured"; above
+  "above MAASP, gas above shoe, MAASP no longer applies, continue". Plot: MAASP line stops where the
+  gas top passes the shoe (labelled). Corrections / tiers = a separate annotated layer; standard hold
+  dashed under the hold to use.
+- Gas at surface: in a wait when gas P <= hold (casing rises only to P); during a bleed when P falls to
+  the hold - the crew stops bleeding at the choke (that row's bleed is partial). Readings still drive
+  the table; warn when readings vs forecast bbl bled differ > 20% (early: dispersed / out of solution;
+  late: bigger influx or gas in solution - user wording).
+- Lubricate and bleed: Pw rule kept; STOP at the gas volume at surface (pit gain + bbl bled, from the
+  readings); print first 5 and last 3 cycles + "... N cycles ...". End: remaining underbalance =
+  Pf - (lubricated mud x column TVD + mud x the rest); <= 10: "Hydrostatic control regained. Casing X psi
+  is trapped pressure. Bleed off in small increments, check 0, flow check, then strip to bottom and
+  circulate."; else "Casing X psi. Remaining underbalance U psi. Do not bleed casing below U + SF psi.
+  Not dead. Kill required (strip to bottom and circulate, or bullhead)."
+- Horizontal sheets: "Gas lying in the lateral may not migrate, so casing can stay flat for a long time.
+  Volumetric steps start when casing begins to rise." and "Shoe at the heel: shoe pressure = BHP. Kick
+  tolerance is very small. If the pre-check fires, consider bullheading before volumetric."
+- Examples (12): on bottom float (SICP 800, Pf 6,868 est.); NEW on bottom NO float (SIDPP 650); tapered
+  3 bbl SF 50/Pw 50 (SICP 741); NEW tapered 10 bbl SHOE AT RISK (SICP 885, SF 50/Pw 50: pre-check, tier 3
+  c1, SUPERVISOR c2); deviated + tapered (SICP 780); horizontal + tapered (SICP 650, SF 100/Pw 50: pre-check,
+  tier 3 every cycle, SF reduced to 67 at c1 then 95-96 - the honest answer, points to bullheading;
+  test cases 50/50 +87 raise, shoe margin 16; 75/25 +89, margin 15; shoe margin 50: SF 17-46); swabs (Pf = 10.4 ppg hydrostatic 6,219,
+  SICP 62 / 36 tapered 3 bbl, lubricate 10.4). Readings generated from the forecast (rises illustrative).
+  Tapered kill sheets now 3 bbl / SICP 741 (peak 1,292 / 1,232, max shoe 5,929, margin 97).
+- Approved baseline: gas at surface 38.8 bbl bled / 1,400 psi / 48.8 bbl gas (Boyle 68,336 / 1,400);
+  end casing 839, remaining underbalance 592, do not bleed below 692.
+- Tier-4 test fixture: tapered shoe-at-risk well with LOT 1,000 (MAASP 790 < SICP 885).
 
 **Bullheading while drilling** (user-confirmed, v0.13):
 - Kick too large to handle at surface: annular SHUT, kill fluid pumped down the drill
@@ -431,6 +492,21 @@ Volumetric / L&B plot (user): x-axis = bbl bled / pumped; casing = hold pressure
   rises by Pw each build and falls by Pw each bleed (casing flat) - a saw-tooth mirroring BHP.
 - Pipe on bottom WITH a float: only casing rises (by SF + Pw, agreed before starting); DP flat.
 - Off bottom / out of hole: see the "never plot 0" labels above.
+- AS BUILT (user-approved v1.3): two charts. Volumetric = casing vs TOTAL BBL BLED (staircase: flat
+  while bleeding at the HOLD TO USE, up while waiting; the standard hold dashed underneath; ends at
+  the SICP read with gas at surface). Lubricate and bleed = CASING ONLY vs TOTAL BBL PUMPED (up to pump-to as bbl go in,
+  straight down to bleed-to). Points come straight from the approved tables - no new calculation.
+- New volumetric inputs: pipe_bottom_md_ft (blank = out of the hole, TD = on bottom, shallower = off
+  bottom), float_in_string, sidpp_psi (needed only on bottom with no float). Every volumetric example
+  with pipe in the hole has a float (user) - except the NO-float example. Drill pipe line ONLY on bottom
+  with no float: DP = SIDPP + (forecast BHP - Pf), and the sheet says "DP readable - use drill pipe
+  pressure method (bleed holding SIDPP + safety margin constant). Drill pipe pressure method valid only
+  if the string is open. If the string or bit is plugged, the drill pipe gauge is not a BHP indicator.
+  Use volumetric on casing." On bottom WITH a float:
+  NO line, "no reading - float" (user). Off bottom: float -> "no reading - float"; no float -> "not a
+  BHP indicator - gas may enter the string" (label, no line - a predicted line would be a guess). Out of the hole -> "pipe out of hole". The printed sheet gets one
+  line saying where the pipe is. Volumetric schematic: TD at the bottom, the pipe to its depth (or
+  "no pipe"), drawn straight to scale by MD.
 
 DONE: `kill_plot.py` + `tests/test_kill_plot.py` - Driller's and W&W, VERTICAL wells only
 (untapered/tapered). Tests: pressures exact, stroke of each maximum within a window
@@ -438,8 +514,10 @@ DONE: `kill_plot.py` + `tests/test_kill_plot.py` - Driller's and W&W, VERTICAL w
 DONE: SF / trapped-pressure bleed / flow check in the Driller's and W&W step lists, plus the
 kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/50, 821/0,
 829/0, SF < OB clamp, high-ICP W&W 61).
-DONE: the web page (v1.1.0), and the deviated/horizontal kill plot (v1.2, see above).
-NEXT (user order): the volumetric plot (+ a schematic for volumetric sheets).
+DONE: the web page (v1.1.0), the deviated/horizontal kill plot (v1.2.0), and the volumetric plot
++ volumetric schematic (v1.3, see "Volumetric / L&B plot").
+NEXT: the user's list is done - ask (roadmap: bullhead and reverse circulation on the web page,
+then the subsea stack).
 
 Web page sub-phases (user-approved; stop after each). DONE: W1-W5, released v1.1.0. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).

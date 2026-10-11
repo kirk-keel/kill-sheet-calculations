@@ -47,6 +47,7 @@ VOLUMETRIC = dict(
     sicp_rises_after_each_cycle=[30, 28, 25, 22, 20, 14, 4],
     sicp_gas_at_surface_psi=1_254,
     bbl_pumped_each_cycle=[6.0, 7.0, 8.0, 9.0, 10.0, 10.0, 11.0, 11.0, 12.0, 12.0, 12.0],
+    pit_gain_bbl=10,
 )
 
 
@@ -103,17 +104,21 @@ def test_unknown_method_is_refused():
 
 
 def test_volumetric_sheet():
+    # The pre-v1.3 example readings: gas at surface after cycle 7 - earlier than the forecast
     sheet = volumetric_sheet(**VOLUMETRIC)
     assert (sheet["mud_gradient_psi_per_ft"], sheet["kill_mud_gradient_psi_per_ft"], sheet["maasp_psi"]) \
         == (0.5408, 0.598, 1124)
     assert [(c["choice"], c["bleed_bbl"], c["used"]) for c in sheet["capacity_choices"]] == [
-        ("smallest annulus", 2.6, True), ("average annulus", 4.2, False), ("longest annulus", 4.5, False),
-    ]
-    assert sheet["first_hold_psi"] == 950
+        ("smallest annulus", 2.6, False), ("average annulus", 4.2, False), ("longest annulus", 4.5, False),
+    ]                                                       # the default is the annulus at the gas
     assert [row["hold_psi"] for row in sheet["volumetric"]] == [950, 1000, 1050, 1100, 1150, 1200, 1250]
+    assert [row["bleed_bbl"] for row in sheet["volumetric"]] == [2.6, 4.2, 4.2, 4.5, 4.5, 4.5, 4.5]
     assert sheet["volumetric"][-1]["gas_at_surface"] is True
-    assert sheet["lubricate_and_bleed"][-1]["bleed_to_psi"] == 0
-    assert sheet["kop_md_ft"] is None                        # vertical: no KOP check
+    assert sheet["readings_gas_at_surface_bbl"] == 29.0
+    assert sheet["arrival_warning"].startswith("Readings show gas at surface at 29.0 bbl bled; the single-bubble "
+                                               "model predicts 38.8 bbl")
+    assert sheet["stopping_volume_bbl"] == 39.0             # pit gain 10 + 29.0 bled (the readings)
+    assert sheet["kop_md_ft"] is None                       # vertical: no KOP check
 
 
 def test_kill_plot_on_the_sheet_drillers():

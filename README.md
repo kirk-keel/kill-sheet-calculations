@@ -36,7 +36,7 @@ trapped pressure, bleeds it off and flow checks. The calculator also runs in you
 
 ### **[Open the web page](https://kirk-keel.github.io/kill-sheet-calculations/)**
 
-- Pick one of 22 example wells (Driller's, Wait and Weight, volumetric and lubricate and
+- Pick one of 24 example wells (Driller's, Wait and Weight, volumetric and lubricate and
   bleed - vertical, deviated and horizontal, untapered and tapered) and change any input.
   The sheet recalculates as you type.
 - Page 1: well schematic, kill mud weight, ICP, FCP, MAMW, MAASP, volumes in bbl and strokes.
@@ -98,6 +98,8 @@ python examples/wait_and_weight_horizontal_well.py   # horizontal, Wait and Weig
 python examples/wait_and_weight_deviated_tapered_well.py     # deviated tapered, Wait and Weight
 python examples/wait_and_weight_horizontal_tapered_well.py   # horizontal tapered, Wait and Weight
 python examples/volumetric_pipe_on_bottom_well.py      # volumetric + L&B, pipe on bottom
+python examples/volumetric_pipe_on_bottom_no_float_well.py   # pipe on bottom, no float (SIDPP read)
+python examples/volumetric_tapered_shoe_at_risk_well.py      # tapered, 10 bbl: shoe at risk at shut-in
 python examples/volumetric_pipe_above_influx_well.py   # volumetric + L&B, pipe above the influx
 python examples/volumetric_pipe_out_of_hole_well.py    # volumetric + L&B, pipe out of the hole
 python examples/volumetric_tapered_pipe_on_bottom_well.py      # tapered string versions of the three
@@ -256,17 +258,37 @@ covers every situation. The team killing the well chooses the **safety margin** 
 | Wait | Let SICP rise by safety margin + working pressure, no bleeding |
 | Volumetric cycle | Bleed `(working pressure / mud gradient) x annular capacity` bbl (IADC #35), holding casing constant; let SICP rise by the working pressure; repeat |
 | Gas at surface | SICP rises **no more than 10 psi in 15 minutes** |
-| Lubricate and bleed | Pump kill weight mud until casing rises by the working pressure; read the bbl pumped; let it lubricate; bleed back to the starting pressure minus `bbl x KWM gradient / annular capacity at surface`; repeat until casing reads **0** |
+| Lubricate and bleed | Pump mud until casing rises by the working pressure; read the bbl pumped; let it lubricate; bleed back to the starting pressure minus `bbl x mud gradient / annular capacity at surface`; repeat until the bbl lubricated **equal the gas volume at surface** |
 
-- **Annular capacity** for the volumetric bleed is the team's choice: there is no single
-  industry standard. The default is the **smallest annulus** the gas will pass through,
-  which bleeds the least mud per cycle; the average and longest are printed alongside.
+**Version 1.3 adds a single-bubble forecast** (`volumetric_model.py`), worked through
+cycle by cycle with the well control specialist. It needs the **pit gain** (and SIDPP if
+it can be read - otherwise formation pressure is *estimated* from SICP, and the sheet
+says so):
+
+- **Where the gas is:** Boyle's law at the top of the bubble - its pressure is
+  `P0 x pit gain / (pit gain + bbl bled)` - and the casing pressure place it. Positions
+  by MD, pressures by TVD.
+- **Bleed per cycle** is sized on the **annulus the gas is in** - the smallest annulus it
+  touches anywhere on its way through the bleed, so any error is an under-bleed, never an
+  over-bleed. A table shows the bbl per cycle for each annulus. (Smallest, average and
+  longest annulus are still selectable.)
+- **Hold to use** is printed beside the **standard** IADC hold (SICP + SF + n x Pw). It is
+  raised - never lowered - when the gas will gain vertical height (a narrower annulus or
+  the build), which would otherwise pull bottomhole pressure below Pf + SF.
+- **Every hold is checked against fracture at the shoe.** If the shoe limits it, the sheet
+  says the safety margin is reduced; if even that leaves bottomhole pressure below Pf, it
+  prints a **SUPERVISOR DECISION** with both holds and both consequences.
+- A **pre-check** warns when SF + Pw is more than the shoe margin at shut-in.
+- **Above MAASP** depends on the gas: below the shoe it is a warning (shoe overpressured);
+  above the shoe MAASP no longer applies. The plot's MAASP line stops where the gas passes
+  the shoe.
+- The **readings still drive the table**; the sheet warns when the gas reaches surface more
+  than 20% earlier or later than the forecast.
+- **Lubricate and bleed stops at the gas volume at surface** and says what is left: the
+  remaining underbalance (do not bleed casing below it + SF - a kill is still required),
+  or, for a swabbed kick, "hydrostatic control regained" with the casing left as trapped
+  pressure.
 - Both the bleed volume and the psi bled are **limits**, so both are rounded **down**.
-- Hold pressures above MAASP are **warned, not stopped**: as the gas comes up the casing
-  pressure keeps rising. On the tapered example (MAASP 889) a 100 / 50 psi margin puts
-  the very first hold at 950, so every cycle is warned.
-- The smallest annulus isn't always around the BHA: on the tapered example it is the
-  5" DP inside the 7" casing, near surface.
 - **Deviated and horizontal wells:** a barrel fills a length of hole along the MD but
   only adds hydrostatic for its TVD, so each barrel is worth less psi. The volume bled
   stays the vertical IADC #35 volume - it bleeds the least mud - and the
@@ -279,8 +301,9 @@ covers every situation. The team killing the well chooses the **safety margin** 
   The sheet **warns** if the lubricated column (`total bbl / surface capacity`) passes
   KOP, because each barrel is then worth less psi than calculated.
 - The tables are driven by what the crew reads - the 15-minute SICP rise after each
-  volumetric cycle, and the bbl pumped each lubricate cycle - because no calculator can
-  predict when the gas will reach surface.
+  volumetric cycle, and the bbl pumped each lubricate cycle. The forecast is a single-bubble
+  model: real gas usually arrives earlier (it disperses, or breaks out of solution in
+  oil-based mud).
 - IADC gives the volumetric formulas (#34, #35). There is no dedicated IADC lubricate and
   bleed formula; it is built from the IADC basics (#12 height of fluid, #13/#14 hydrostatic).
 
@@ -533,9 +556,13 @@ Volumetric method and lubricate and bleed, from `python examples/volumetric_pipe
 VOLUMETRIC - pipe on bottom, unable to pump (vertical, untapered)
 ====================================================
 Mud gradient                   0.5408 psi/ft  (10.4 ppg)
-Kill mud gradient              0.5980 psi/ft  (11.5 ppg)
+Mud lubricated (L&B)           0.5980 psi/ft  (11.5 ppg)
 MAASP                           1,124 psi
+Fracture at the shoe            3,909 psi
 Safety margin / working       100 / 50 psi  (team's choice)
+Pit gain                           10 bbl  (influx 344 ft MD / 344 ft TVD, gas 0.1000 psi/ft)
+Formation pressure (Pf)         6,868 psi  (estimated: assumes influx at bottom, 0.1 psi/ft, no migration before the SICP reading)
+Pipe on bottom, float in the string: no drill pipe reading - casing only.
 
 Annulus, bottom up                      Capacity  Length ft
   DC x 8-1/2" hole                       0.0291        600
@@ -544,35 +571,52 @@ Annulus, bottom up                      Capacity  Length ft
   DP x 9-5/8" casing                     0.0489      5,150
 
 Volume to bleed per 50 psi = (working pressure / mud gradient) x annular capacity
-  smallest annulus      0.0291 bbl/ft    2.6 bbl  <- used
+  annulus at the gas    (forecast)        see below  <- used
+  smallest annulus      0.0291 bbl/ft    2.6 bbl
   average annulus       0.0464 bbl/ft    4.2 bbl
   longest annulus       0.0489 bbl/ft    4.5 bbl
+  Bleed per cycle by annulus (the gas top's annulus, conservatively):
+    Capacity bbl/ft  bbl per cycle  From cycle  bbl bled before
+             0.0291            2.6           1              0.0
+             0.0459            4.2           2              2.6
+             0.0489            4.5           4             11.0
 
-Volumetric method
-  wait: let SICP rise from 800 to 950 psi (safety margin + working pressure)
-  Cycle  Hold casing psi  Bleed bbl  Total bbl  15-min rise
-      1              950        2.6        2.6        30 psi
-      2            1,000        2.6        5.2        28 psi
-      3            1,050        2.6        7.8        25 psi
-      4            1,100        2.6       10.4        22 psi
-      5            1,150        2.6       13.0        20 psi  ! above MAASP - continue
-      6            1,200        2.6       15.6        14 psi  ! above MAASP - continue
-      7            1,250        2.6       18.2         4 psi  ! above MAASP - continue  GAS AT SURFACE
+Volumetric method - casing held at the 'Hold to use' while bleeding
+  Tier 0: standard hold, no correction. 1: raised for the gas gaining vertical height. 2: limited by the shoe, BHP still >= Pf + SF. 3: limited by the shoe, SF reduced. 4: supervisor decision.
+  Cycle  Standard hold  Hold to use  Tier  Bleed bbl  Total bbl  15-min rise
+      1            950          950     0        2.6        2.6       30 psi
+      2          1,000        1,000     0        4.2        6.8       28 psi
+      3          1,050        1,050     0        4.2       11.0       26 psi
+      4          1,100        1,100     0        4.5       15.5       24 psi
+      5          1,150        1,150     0        4.5       20.0       22 psi
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+      6          1,200        1,200     0        4.5       24.5       20 psi
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+      7          1,250        1,250     0        4.5       29.0       18 psi
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+      8          1,300        1,300     0        4.5       33.5       16 psi
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+      9          1,350        1,350     0        4.5       38.0       14 psi
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+     10          1,400        1,400     0        0.8       38.8        0 psi  GAS AT SURFACE
+          above MAASP, gas above shoe, MAASP no longer applies, continue
+  Gas at surface: readings 38.8 bbl bled; forecast 38.8 bbl (cycle 10, during the bleed), casing 1,400 psi, gas 48.8 bbl
 
-Lubricate and bleed - kill mud, annulus at surface 0.0489 bbl/ft
+Lubricate and bleed - 11.5 ppg mud, annulus at surface 0.0489 bbl/ft
   hydrostatic added = bbl pumped x 0.5980 / 0.0489
+  stop when the bbl lubricated = the gas volume at surface: 48.8 bbl (pit gain + bbl bled; forecast 48.8 bbl)
   Cycle  Pump to psi  bbl pumped  Hydrostatic psi  Bleed to psi
-      1        1,304         6.0               73         1,181
-      2        1,231         7.0               85         1,096
-      3        1,146         8.0               97           999
-      4        1,049         9.0              110           889
-      5          939        10.0              122           767
-      6          817        10.0              122           645
-      7          695        11.0              134           511
-      8          561        11.0              134           377
-      9          427        12.0              146           231
-     10          281        12.0              146            85
-     11          135        12.0              146             0  hydrostatic control regained
+      1        1,450         1.7               20         1,380
+      2        1,430         1.6               19         1,361
+      3        1,411         1.6               19         1,342
+      4        1,392         1.6               19         1,323
+      5        1,373         1.5               18         1,305
+    ... 79 cycles ...
+     85          892         0.1                1           841
+     86          891         0.1                1           840
+     87          890         0.1                1           839
+  87 cycles, 48.8 bbl lubricated
+  Casing 839 psi. Remaining underbalance 592 psi. Do not bleed casing below 692 psi. Not dead. Kill required (strip to bottom and circulate, or bullhead).
 ```
 
 Bullheading while drilling, from `python examples/bullhead_well.py`:
@@ -668,7 +712,7 @@ deviated/horizontal untapered, deviated/horizontal tapered.
   Weight, volumetric and lubricate and bleed, every well and string type, printable (**v1.1**)
 - [x] Kill plot of forecast drill pipe and casing pressure, vertical wells (**v1.1**)
 - [x] Kill plot for deviated and horizontal wells (**v1.2**)
-- [ ] Volumetric plot, and a schematic for volumetric sheets
+- [x] Volumetric plot, and a schematic for volumetric sheets (**v1.3**)
 - [ ] Bullheading and reverse circulation on the web page
 
 ### Subsea BOP stack
@@ -701,6 +745,8 @@ src/killsheet/
   reverse_circulation.py  reverse circulation kill for CWI wells
   kill_plot.py   kill plot: forecast drill pipe and casing pressure (single-bubble gas model)
   kill_sheet.py  the whole kill sheet in one place - used by the printer and the web page
+  volumetric_model.py  volumetric forecast: gas position, bleed at the gas, hold to use, shoe check
+  volumetric_plot.py  volumetric and lubricate and bleed charts (pressure vs bbl)
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
@@ -712,6 +758,8 @@ examples/
   wait_and_weight_deviated_tapered_well.py    deviated tapered, Wait and Weight
   wait_and_weight_horizontal_tapered_well.py  horizontal tapered, Wait and Weight
   volumetric_pipe_on_bottom_well.py      volumetric + L&B, pipe on bottom
+  volumetric_pipe_on_bottom_no_float_well.py  pipe on bottom, no float (drill pipe readable)
+  volumetric_tapered_shoe_at_risk_well.py     tapered, 10 bbl kick: pre-check, supervisor decision
   volumetric_pipe_above_influx_well.py   volumetric + L&B, pipe above the influx
   volumetric_pipe_out_of_hole_well.py    volumetric + L&B, pipe out of the hole
   volumetric_tapered_*_well.py           the same three situations, tapered string

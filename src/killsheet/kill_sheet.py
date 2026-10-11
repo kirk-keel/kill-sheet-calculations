@@ -22,9 +22,22 @@ from killsheet.formulas import (
     max_allowable_mud_weight,
 )
 from killsheet.formulas import PSI_PER_FT_PER_PPG
-from killsheet.kill_plot import MODEL_LIMITS, drillers_kill_plot, shoe_margin_warning, wait_and_weight_kill_plot
+from killsheet.kill_plot import LATERAL_NOTE as LATERAL_GRADIENT_NOTE
+from killsheet.kill_plot import (
+    MODEL_LIMITS,
+    drillers_kill_plot,
+    fracture_at_shoe,
+    shoe_margin_warning,
+    wait_and_weight_kill_plot,
+)
 from killsheet.rounding import round_to_tenth
-from killsheet.lubricate_and_bleed import cycles_past_kop, kill_mud_column_ft, lubricate_and_bleed_table
+from killsheet.lubricate_and_bleed import (
+    cycles_past_kop,
+    end_of_lubricate_and_bleed,
+    kill_mud_column_ft,
+    lubricate_and_bleed_to_volume,
+    remaining_underbalance,
+)
 from killsheet.schedule import TEN_STEPS, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
@@ -37,12 +50,34 @@ from killsheet.strokes import (
     total_volume,
 )
 from killsheet.volumetric import (
-    SMALLEST,
     angle_corrected_volume_to_bleed,
     annular_capacity_choices,
+    gas_at_surface,
     mud_gradient,
     volume_to_bleed_per_cycle,
-    volumetric_table,
+)
+from killsheet.volumetric_model import (
+    ANNULUS_AT_THE_GAS,
+    LATERAL_NOTE,
+    PF_ESTIMATED,
+    SHOE_AT_HEEL_NOTE,
+    TIERS,
+    Annulus,
+    VolumetricModel,
+    arrival_warning,
+    correction_note,
+    influx_at_shut_in,
+    maasp_label,
+    precheck_warning,
+    tier_warning,
+)
+from killsheet.volumetric_plot import (
+    ON_BOTTOM,
+    drill_pipe_reading,
+    lubricate_and_bleed_points,
+    pipe_note,
+    pipe_position,
+    volumetric_points,
 )
 from killsheet.wait_and_weight import (
     ICP_MATCHES,
@@ -344,85 +379,224 @@ def volumetric_sheet(
     sicp_rises_after_each_cycle,
     sicp_gas_at_surface_psi,
     bbl_pumped_each_cycle,
-    capacity_choice=SMALLEST,
+    pit_gain_bbl,
+    capacity_choice=ANNULUS_AT_THE_GAS,
     td_md_ft=None,
     td_tvd_ft=None,
     shoe_md_ft=None,
     key_points=(),
+    pipe_bottom_md_ft=None,
+    float_in_string=False,
+    sidpp_psi=None,
+    shoe_margin_psi=0,
 ):
     """Volumetric method, then lubricate and bleed, for any situation.
 
     annulus_bottom_up: (name, capacity bbl/ft, length ft MD) from the BOTTOM UP,
     including sections with no pipe in them. The top section is the annulus
     at surface, used for lubricate and bleed.
+    kill_mud_weight_ppg: the mud LUBRICATED (kill mud; original mud for a swabbed kick).
+    pit_gain_bbl: the kick size - the forecast (volumetric_model.py) needs it.
+    capacity_choice: ANNULUS_AT_THE_GAS (default: the forecast picks the annulus the
+    gas is in, conservatively), or the team's fixed SMALLEST / AVERAGE / LONGEST.
 
     Vertical well: leave out td_md_ft, td_tvd_ft, shoe_md_ft and key_points.
     Deviated or horizontal well: give the TD and shoe MD/TVD and the key points
-    as (name, MD, TVD). The bleed used stays the vertical (IADC #35) volume; the
-    angle-corrected volume for each section is shown for information.
+    as (name, MD, TVD). The angle-corrected volume for each section is shown for information.
+
+    Where the pipe is (for the plot and the schematic):
+      pipe_bottom_md_ft - blank = out of the hole; TD = on bottom; shallower = off bottom
+      float_in_string   - True: no drill pipe reading
+      sidpp_psi         - on bottom with no float (the drill pipe is readable); it also
+                          gives Pf - without it Pf is estimated from SICP
+
+    shoe_margin_psi: the team's margin below fracture at the shoe (default 0) - the shoe
+                     tiers and the pre-check use fracture - shoe margin.
+
+    The crew's readings drive the table: SICP rise over each 15 minute wait (gas at
+    surface at 10 psi or less), SICP with the gas at surface, bbl pumped each L&B cycle.
     """
     annulus = without_names(annulus_bottom_up)
     gradient = mud_gradient(original_mud_weight_ppg)
-    kill_gradient = mud_gradient(kill_mud_weight_ppg)
-    maasp_psi = maasp(max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg),
-                      original_mud_weight_ppg, shoe_tvd_ft)
+    lubricated_gradient = mud_gradient(kill_mud_weight_ppg)
+    mamw = max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg)
+    maasp_psi = maasp(mamw, original_mud_weight_ppg, shoe_tvd_ft)
+    fracture_psi = fracture_at_shoe(mamw, shoe_tvd_ft)
     choices = annular_capacity_choices(annulus)
-    bleed_bbl = volume_to_bleed_per_cycle(working_pressure_psi, gradient, choices[capacity_choice])
+    sf, pw = safety_margin_psi, working_pressure_psi
 
     td_md = td_md_ft if td_md_ft is not None else sum(length for _name, _cap, length in annulus_bottom_up)
     td_tvd = td_tvd_ft if td_tvd_ft is not None else td_md
     shoe_md = shoe_md_ft if shoe_md_ft is not None else shoe_tvd_ft
     vertical = td_md == td_tvd and not key_points
-    sections = []
-    horizontal = False
+    survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (td_md, td_tvd)]
+    sections, horizontal = [], False
     if vertical:
         sections = [{"name": name, "capacity_bbl_per_ft": capacity, "length_ft": length}
                     for name, capacity, length in annulus_bottom_up]
     else:
-        survey = [(md, tvd) for _name, md, tvd in key_points] + [(shoe_md, shoe_tvd_ft), (td_md, td_tvd)]
         bottom_md = td_md
         for name, capacity, length in annulus_bottom_up:
             top_md = bottom_md - length
             section_tvd = tvd_at_md(bottom_md, survey) - tvd_at_md(top_md, survey)
-            corrected = angle_corrected_volume_to_bleed(working_pressure_psi, gradient, capacity, length, section_tvd)
+            corrected = angle_corrected_volume_to_bleed(pw, gradient, capacity, length, section_tvd)
             horizontal = horizontal or corrected is None
             sections.append({"name": name, "capacity_bbl_per_ft": capacity, "length_ft": length,
                              "tvd_ft": section_tvd, "tvd_over_md": section_tvd / length,
                              "angle_corrected_bleed_bbl": corrected})
             bottom_md = top_md
 
+    position = pipe_position(pipe_bottom_md_ft, td_md)
+    no_line = drill_pipe_reading(position, float_in_string)
+    if no_line is None and sidpp_psi is None:
+        raise ValueError("Pipe on bottom with no float: the drill pipe is readable - enter the SIDPP.")
+
+    # The forecast: where the gas is, the hold to use, the shoe.
+    well = Annulus(annulus, td_md, td_tvd, shoe_md, shoe_tvd_ft, key_points)
+    influx = influx_at_shut_in(well, pit_gain_bbl, sicp_psi, sidpp_psi, gradient)
+    fixed = None if capacity_choice == ANNULUS_AT_THE_GAS else choices[capacity_choice]
+    model = VolumetricModel(well, influx, gradient, sicp_psi, sf, pw, fracture_psi, pit_gain_bbl, fixed,
+                            shoe_margin_psi)
+    forecast, model_surface = model.forecast()
+
+    # The table: the readings decide when the gas is at surface; the forecast gives each hold.
+    rows, total, hold, standard, last = [], 0.0, sicp_psi + sf, sicp_psi + sf, None
+    for cycle, rise in enumerate(sicp_rises_after_each_cycle, start=1):
+        f = forecast[cycle - 1] if cycle <= len(forecast) else None
+        if f:
+            hold, bleed_bbl, capacity = f.hold_psi, f.bleed_bbl, f.capacity_bbl_per_ft
+            if cycle == model_surface.cycle and model_surface.during == "bleed":
+                bleed_bbl = round_to_tenth(model_surface.bled_bbl - total)   # gas at the choke: stop bleeding
+            standard = f.standard_hold_psi
+        else:                                     # beyond the forecast: the standard step
+            hold, bleed_bbl, capacity = hold + pw, last["bleed_bbl"], last["capacity_bbl_per_ft"]
+            standard += pw
+        total = round_to_tenth(total + bleed_bbl)
+        row = {
+            "cycle": cycle, "standard_hold_psi": standard, "hold_psi": hold,
+            "correction_psi": f.correction_psi if f else 0, "tier": f.tier if f else None,
+            "capacity_bbl_per_ft": capacity, "bleed_bbl": bleed_bbl, "total_bled_bbl": total,
+            "sicp_rise_psi": rise, "gas_at_surface": gas_at_surface(rise),
+            "gas_below_shoe": f.gas_below_shoe if f else None,
+            "gas_top_tvd_ft": f.gas_top_tvd_ft if f else None,
+            "lowest_bhp_vs_pf_psi": f.lowest_bhp_vs_pf_psi if f else None,
+            "highest_shoe_psi": f.highest_shoe_psi if f else None,
+            "bhp_at_hold_vs_pf_psi": f.bhp_at_hold_vs_pf_psi if f else None,
+            "bhp_after_bleed_vs_pf_psi": f.bhp_after_bleed_vs_pf_psi if f else None,
+        }
+        reasons = []
+        if last and last["tier"] in (2, 3, 4):
+            reasons.append(f"Standard re-based after shoe-limited cycle {last['cycle']}: previous hold used + Pw.")
+        if row["correction_psi"]:
+            reasons.append(correction_note(row["correction_psi"]))
+            if row["tier"] in (0, 1) and hold - standard != row["correction_psi"]:
+                reasons.append(f"Hold to use is {hold - standard:,} psi above the standard (corrections so far).")
+        row["warning"] = tier_warning(f, sf, shoe_margin_psi) if f else None
+        if row["warning"]:
+            reasons.append(row["warning"])
+        label = maasp_label(hold, maasp_psi, row["gas_below_shoe"]) if f else None
+        if label:
+            reasons.append(label)
+        if not f:
+            reasons.append("beyond the forecast (the model has the gas at surface): standard step")
+        row["reasons"] = reasons
+        rows.append(row)
+        last = row
+        if row["gas_at_surface"]:
+            break
+
+    # Gas at surface: readings vs the model.
+    readings_bbl = rows[-1]["total_bled_bbl"] if rows and rows[-1]["gas_at_surface"] else None
+    arrival = None
+    if readings_bbl is not None:
+        where = model.position(rows[-1]["hold_psi"], round_to_tenth(pit_gain_bbl + readings_bbl))
+        arrival = arrival_warning(readings_bbl, model_surface.bled_bbl, where.top_tvd_ft if where else None)
+
+    # Lubricate and bleed: until the bbl lubricated = the gas volume at surface (from the readings).
+    stopping_bbl = round_to_tenth(pit_gain_bbl + (readings_bbl or 0))
     surface_capacity = annulus[-1][0]
-    # KOP: the deepest key point that is still vertical (TVD = MD).
+    lube = lubricate_and_bleed_to_volume(sicp_gas_at_surface_psi, pw, bbl_pumped_each_cycle,
+                                         lubricated_gradient, surface_capacity, stopping_bbl)
+    lubricated = round_to_tenth(sum(row.bbl_pumped for row in lube))
+    end_casing = lube[-1].bleed_to_psi if lube else sicp_gas_at_surface_psi
+    underbalance = remaining_underbalance(influx.formation_psi, lubricated, lubricated_gradient, gradient,
+                                          td_tvd, surface_capacity, well.tvd)
     vertical_points = [md for _name, md, tvd in key_points if md == tvd]
     kop_md = max(vertical_points) if vertical_points else None
-    lube = lubricate_and_bleed_table(sicp_gas_at_surface_psi, working_pressure_psi, bbl_pumped_each_cycle,
-                                     kill_gradient, surface_capacity)
     past_kop = cycles_past_kop(lube, surface_capacity, kop_md)
+
+    # What the sheet says before the tables.
+    notes = [pipe_note(position, float_in_string, pipe_bottom_md_ft)]
+    if influx.in_lateral:
+        notes += [LATERAL_NOTE, LATERAL_GRADIENT_NOTE]
+    if shoe_tvd_ft == td_tvd:
+        notes.append(SHOE_AT_HEEL_NOTE)
+    bleeds = []
+    for row in forecast:
+        if not bleeds or bleeds[-1]["capacity_bbl_per_ft"] != row.capacity_bbl_per_ft:
+            bleeds.append({"capacity_bbl_per_ft": row.capacity_bbl_per_ft, "bleed_bbl": row.bleed_bbl,
+                           "from_cycle": row.cycle, "bled_before_bbl": round_to_tenth(row.total_bled_bbl - row.bleed_bbl)})
+    pipe = ([] if pipe_bottom_md_ft is None else
+            [{"name": "pipe", "top_md_ft": 0, "bottom_md_ft": pipe_bottom_md_ft, "volume_bbl": None}])
     return {
         "title": title,
         "mud_weight_ppg": original_mud_weight_ppg,
         "mud_gradient_psi_per_ft": gradient,
         "kill_mud_weight_ppg": kill_mud_weight_ppg,
-        "kill_mud_gradient_psi_per_ft": kill_gradient,
+        "kill_mud_gradient_psi_per_ft": lubricated_gradient,
         "maasp_psi": maasp_psi,
-        "safety_margin_psi": safety_margin_psi,
-        "working_pressure_psi": working_pressure_psi,
+        "fracture_psi": fracture_psi,
+        "shoe_margin_psi": shoe_margin_psi,
+        "tiers": TIERS,
+        "safety_margin_psi": sf,
+        "working_pressure_psi": pw,
+        "pit_gain_bbl": pit_gain_bbl,
+        "influx": {"height_md_ft": influx.height_md_ft, "height_tvd_ft": influx.height_tvd_ft,
+                   "gradient_psi_per_ft": influx.gradient_psi_per_ft, "formation_psi": influx.formation_psi,
+                   "pf_note": PF_ESTIMATED if influx.pf_estimated else f"from SIDPP {sidpp_psi:,} psi"},
+        "precheck": precheck_warning(sicp_psi, sf, pw, maasp_psi, shoe_margin_psi),
+        "notes": notes,
         "vertical": vertical,
         "sections": sections,
         "horizontal_note": horizontal,
         "capacity_choices": [
             {"choice": choice, "capacity_bbl_per_ft": capacity, "used": choice == capacity_choice,
-             "bleed_bbl": volume_to_bleed_per_cycle(working_pressure_psi, gradient, capacity)}
+             "bleed_bbl": volume_to_bleed_per_cycle(pw, gradient, capacity)}
             for choice, capacity in choices.items()
         ],
+        "capacity_choice": capacity_choice,
+        "bleed_by_annulus": bleeds,
         "sicp_psi": sicp_psi,
-        "first_hold_psi": sicp_psi + safety_margin_psi + working_pressure_psi,
-        "volumetric": [row._asdict() for row in volumetric_table(
-            sicp_psi, safety_margin_psi, working_pressure_psi, bleed_bbl, maasp_psi, sicp_rises_after_each_cycle)],
+        "volumetric": rows,
+        "model_gas_at_surface": model_surface._asdict(),
+        "readings_gas_at_surface_bbl": readings_bbl,
+        "arrival_warning": arrival,
         "surface_capacity_bbl_per_ft": surface_capacity,
+        "stopping_volume_bbl": stopping_bbl,
+        "model_gas_volume_bbl": model_surface.gas_volume_bbl,
         "lubricate_and_bleed": [dict(row._asdict(), past_kop=row.cycle in past_kop) for row in lube],
+        "lubricated_bbl": lubricated,
+        "end_casing_psi": end_casing,
+        "remaining_underbalance_psi": underbalance,
+        "end_message": end_of_lubricate_and_bleed(end_casing, underbalance, sf),
         "kop_md_ft": kop_md,
-        "kill_mud_column_ft": (kill_mud_column_ft(sum(row.bbl_pumped for row in lube), surface_capacity)
-                               if kop_md is not None else None),
+        "kill_mud_column_ft": kill_mud_column_ft(lubricated, surface_capacity) if kop_md is not None else None,
         "passed_kop": bool(past_kop),
+        "pipe_position": position,
+        "pipe_note": notes[0],
+        "plot": {
+            "volumetric": volumetric_points(rows, sicp_psi, sicp_gas_at_surface_psi,
+                                            sidpp_psi if no_line is None else None),
+            "lubricate_and_bleed": lubricate_and_bleed_points(sicp_gas_at_surface_psi, lube),
+            "drill_pipe_label": no_line,
+            "maasp_psi": maasp_psi,
+        },
+        "schematic": {
+            "bit_md_ft": td_md, "bit_tvd_ft": td_tvd, "bottom_name": "TD",
+            "shoe_md_ft": shoe_md, "shoe_tvd_ft": shoe_tvd_ft,
+            "key_points": [{"name": name, "md_ft": md, "tvd_ft": tvd} for name, md, tvd in key_points],
+            "string": pipe,
+            "pipe_bottom_tvd_ft": None if pipe_bottom_md_ft is None else tvd_at_md(pipe_bottom_md_ft, survey),
+            "pipe_on_bottom": position == ON_BOTTOM,
+        },
     }

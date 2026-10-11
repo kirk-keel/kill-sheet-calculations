@@ -90,15 +90,27 @@ def print_steps(steps):
 def print_volumetric_sheet(**well):
     """Print the volumetric method, then lubricate and bleed (see killsheet.kill_sheet.volumetric_sheet)."""
     sheet = volumetric_sheet(**well)
-    pw = sheet["working_pressure_psi"]
+    pw, sf = sheet["working_pressure_psi"], sheet["safety_margin_psi"]
+    influx = sheet["influx"]
     print(sheet["title"])
     print("=" * 52)
     print(f"Mud gradient                 {sheet['mud_gradient_psi_per_ft']:>8.4f} psi/ft  "
           f"({sheet['mud_weight_ppg']:.1f} ppg)")
-    print(f"Kill mud gradient            {sheet['kill_mud_gradient_psi_per_ft']:>8.4f} psi/ft  "
+    print(f"Mud lubricated (L&B)         {sheet['kill_mud_gradient_psi_per_ft']:>8.4f} psi/ft  "
           f"({sheet['kill_mud_weight_ppg']:.1f} ppg)")
     print(f"MAASP                        {sheet['maasp_psi']:>8,} psi")
-    print(f"Safety margin / working      {sheet['safety_margin_psi']:>4,} / {pw:,} psi  (team's choice)")
+    print(f"Fracture at the shoe         {sheet['fracture_psi']:>8,} psi")
+    if sheet["shoe_margin_psi"]:
+        print(f"Shoe margin (team's choice)  {sheet['shoe_margin_psi']:>8,} psi  (shoe limit = fracture - margin = "
+              f"{sheet['fracture_psi'] - sheet['shoe_margin_psi']:,} psi)")
+    print(f"Safety margin / working      {sf:>4,} / {pw:,} psi  (team's choice)")
+    print(f"Pit gain                     {sheet['pit_gain_bbl']:>8} bbl  (influx {influx['height_md_ft']:,} ft MD / "
+          f"{influx['height_tvd_ft']:,} ft TVD, gas {influx['gradient_psi_per_ft']:.4f} psi/ft)")
+    print(f"Formation pressure (Pf)      {influx['formation_psi']:>8,} psi  ({influx['pf_note']})")
+    for note in sheet["notes"]:
+        print(note)
+    if sheet["precheck"]:
+        print(f"PRE-CHECK: {sheet['precheck']}")
     print()
     if sheet["vertical"]:
         print("Annulus, bottom up                      Capacity  Length ft")
@@ -112,41 +124,65 @@ def print_volumetric_sheet(**well):
             print(f"  {row['name']:<28}{row['capacity_bbl_per_ft']:>9.4f} {row['length_ft']:>7,} "
                   f"{row['tvd_ft']:>7,}  {row['tvd_over_md']:>6.3f}  {shown}")
         print("  Angle-corrected volumes are for information only - the volume bled is the")
-        print("  vertical IADC #35 volume below, which bleeds the least mud.")
+        print("  vertical IADC #35 volume.")
         if sheet["horizontal_note"]:
             print("  NOTE: gas in the horizontal section doesn't migrate the way it does vertically -")
             print("  it can sit in high spots. The volumetric method applies once the gas is in the")
             print("  build or vertical section.")
     print()
     print(f"Volume to bleed per {pw} psi = (working pressure / mud gradient) x annular capacity")
+    used = sheet["capacity_choice"]
+    print(f"  {'annulus at the gas':<20}  (forecast)        see below{'  <- used' if used == 'annulus at the gas' else ''}")
     for row in sheet["capacity_choices"]:
         marker = "  <- used" if row["used"] else ""
         print(f"  {row['choice']:<20}{row['capacity_bbl_per_ft']:>8.4f} bbl/ft  {row['bleed_bbl']:>5.1f} bbl{marker}")
+    print("  Bleed per cycle by annulus (the gas top's annulus, conservatively):")
+    print("    Capacity bbl/ft  bbl per cycle  From cycle  bbl bled before")
+    for row in sheet["bleed_by_annulus"]:
+        print(f"    {row['capacity_bbl_per_ft']:>15.4f}  {row['bleed_bbl']:>13.1f}  {row['from_cycle']:>10}"
+              f"  {row['bled_before_bbl']:>15.1f}")
     print()
 
-    print("Volumetric method")
-    print(f"  wait: let SICP rise from {sheet['sicp_psi']:,} to "
-          f"{sheet['first_hold_psi']:,} psi (safety margin + working pressure)")
-    print("  Cycle  Hold casing psi  Bleed bbl  Total bbl  15-min rise")
+    print("Volumetric method - casing held at the 'Hold to use' while bleeding")
+    print(f"  {sheet['tiers']}")
+    print("  Cycle  Standard hold  Hold to use  Tier  Bleed bbl  Total bbl  15-min rise")
     for row in sheet["volumetric"]:
         note = "  GAS AT SURFACE" if row["gas_at_surface"] else ""
-        warning = "  ! above MAASP - continue" if row["above_maasp"] else ""
-        print(f"  {row['cycle']:>5}  {row['hold_psi']:>15,}  {row['bleed_bbl']:>9.1f}  {row['total_bled_bbl']:>9.1f}"
-              f"  {row['sicp_rise_psi']:>8} psi{warning}{note}")
+        tier = "-" if row["tier"] is None else row["tier"]
+        print(f"  {row['cycle']:>5}  {row['standard_hold_psi']:>13,}  {row['hold_psi']:>11,}  {tier:>4}"
+              f"  {row['bleed_bbl']:>9.1f}  {row['total_bled_bbl']:>9.1f}  {row['sicp_rise_psi']:>7} psi{note}")
+        for reason in row["reasons"]:
+            print(f"{'':10}{reason}")
+    surface = sheet["model_gas_at_surface"]
+    if sheet["readings_gas_at_surface_bbl"] is not None:
+        print(f"  Gas at surface: readings {sheet['readings_gas_at_surface_bbl']:.1f} bbl bled; forecast "
+              f"{surface['bled_bbl']:.1f} bbl (cycle {surface['cycle']}, during the {surface['during']}), "
+              f"casing {surface['casing_psi']:,} psi, gas {surface['gas_volume_bbl']:.1f} bbl")
+    if sheet["arrival_warning"]:
+        print(f"  ! {sheet['arrival_warning']}")
     print()
 
     surface_capacity = sheet["surface_capacity_bbl_per_ft"]
-    print(f"Lubricate and bleed - kill mud, annulus at surface {surface_capacity:.4f} bbl/ft")
+    lube = sheet["lubricate_and_bleed"]
+    print(f"Lubricate and bleed - {sheet['kill_mud_weight_ppg']:.1f} ppg mud, annulus at surface "
+          f"{surface_capacity:.4f} bbl/ft")
     print(f"  hydrostatic added = bbl pumped x {sheet['kill_mud_gradient_psi_per_ft']:.4f} / {surface_capacity:.4f}")
+    print(f"  stop when the bbl lubricated = the gas volume at surface: {sheet['stopping_volume_bbl']:.1f} bbl "
+          f"(pit gain + bbl bled; forecast {sheet['model_gas_volume_bbl']:.1f} bbl)")
     print("  Cycle  Pump to psi  bbl pumped  Hydrostatic psi  Bleed to psi")
-    for row in sheet["lubricate_and_bleed"]:
-        done = "  hydrostatic control regained" if row["bleed_to_psi"] == 0 else ""
-        warning = "  ! kill mud below KOP - less psi per bbl" if row["past_kop"] else ""
+    shown = lube if len(lube) <= 8 else lube[:5] + [None] + lube[-3:]
+    for row in shown:
+        if row is None:
+            print(f"    ... {len(lube) - 8} cycles ...")
+            continue
+        warning = "  ! mud below KOP - less psi per bbl" if row["past_kop"] else ""
         print(f"  {row['cycle']:>5}  {row['pump_to_psi']:>11,}  {row['bbl_pumped']:>10.1f}  "
-              f"{row['hydrostatic_added_psi']:>15,}  {row['bleed_to_psi']:>12,}{warning}{done}")
+              f"{row['hydrostatic_added_psi']:>15,}  {row['bleed_to_psi']:>12,}{warning}")
+    print(f"  {len(lube)} cycles, {sheet['lubricated_bbl']:.1f} bbl lubricated")
     if sheet["kop_md_ft"] is not None:
-        print(f"  kill mud column {sheet['kill_mud_column_ft']:,} ft vs KOP {sheet['kop_md_ft']:,} ft"
+        print(f"  mud column {sheet['kill_mud_column_ft']:,} ft vs KOP {sheet['kop_md_ft']:,} ft"
               + (" - PASSED KOP" if sheet["passed_kop"] else " - stays above KOP"))
+    print(f"  {sheet['end_message']}")
 
 
 def print_bullhead_sheet(

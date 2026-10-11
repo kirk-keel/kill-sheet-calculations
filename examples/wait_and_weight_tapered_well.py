@@ -23,15 +23,15 @@ WELL = dict(
     test_mud_weight_ppg=10.0,
     # Kick data
     sidpp_psi=650,
-    sicp_psi=800,
-    pit_gain_bbl=10,                    # kick size, for the kill plot
+    sicp_psi=741,                       # 3 bbl at 0.1 psi/ft: 650 + 0.4408 x 207 ft
+    pit_gain_bbl=3,                     # kick size, for the kill plot
     scr_pressure_psi=750,               # at 30 spm
     safety_margin_psi=50,               # held on bottom, chosen by the team
     # Wait and Weight: retake SIDPP (bump the float) and SICP just before
     # start-up, and the drill pipe reading once at kill rate
     # (leave observed_icp_psi as None until you have it)
     sidpp_at_start_psi=650,
-    sicp_at_start_psi=800,
+    sicp_at_start_psi=741,
     observed_icp_psi=None,
     # Pump and volumes: (name, capacity bbl/ft, length ft)
     pump_output_bbl_per_stk=0.117,

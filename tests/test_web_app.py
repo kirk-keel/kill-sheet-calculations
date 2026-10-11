@@ -21,7 +21,7 @@ def test_every_drillers_ww_and_volumetric_example_is_offered():
     on_disk = {path.stem for path in (ROOT / "examples").glob("*_well.py")
                if not path.stem.startswith(("bullhead", "reverse_circulation"))}
     assert offered == on_disk
-    assert len(offered) == 22
+    assert len(offered) == 24
 
 
 @pytest.mark.parametrize("well", WELLS["wells"], ids=lambda well: well["id"])

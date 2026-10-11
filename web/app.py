@@ -12,6 +12,7 @@ import json
 from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, kill_sheet, volumetric_sheet
 from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS
 from killsheet.volumetric import AVERAGE, LONGEST, SMALLEST
+from killsheet.volumetric_model import ANNULUS_AT_THE_GAS
 
 KILL_SHEET = "kill sheet"
 VOLUMETRIC = "volumetric"
@@ -32,9 +33,11 @@ EXAMPLE_WELLS = [
     ("wait_and_weight_horizontal_well", "Wait and Weight - horizontal, untapered"),
     ("wait_and_weight_horizontal_tapered_well", "Wait and Weight - horizontal, tapered"),
     ("volumetric_pipe_on_bottom_well", "Volumetric + L&B - pipe on bottom, vertical, untapered"),
+    ("volumetric_pipe_on_bottom_no_float_well", "Volumetric + L&B - pipe on bottom, NO float, vertical, untapered"),
     ("volumetric_pipe_above_influx_well", "Volumetric + L&B - pipe above the influx, vertical, untapered"),
     ("volumetric_pipe_out_of_hole_well", "Volumetric + L&B - pipe out of the hole, vertical"),
     ("volumetric_tapered_pipe_on_bottom_well", "Volumetric + L&B - pipe on bottom, vertical, tapered"),
+    ("volumetric_tapered_shoe_at_risk_well", "Volumetric + L&B - tapered, 10 bbl, SHOE AT RISK at shut-in"),
     ("volumetric_tapered_pipe_above_influx_well", "Volumetric + L&B - pipe above the influx, vertical, tapered"),
     ("volumetric_tapered_pipe_out_of_hole_well", "Volumetric + L&B - pipe out of the hole, vertical, tapered"),
     ("volumetric_deviated_well", "Volumetric + L&B - deviated, pipe on bottom, untapered"),
@@ -44,7 +47,7 @@ EXAMPLE_WELLS = [
 ]
 
 # The input form for each kind of sheet: (input name, label, type, optional).
-# Types: text, number (with its unit), a list of choices, sections
+# Types: text, number (with its unit), a list of choices, yesno, sections
 # (name, capacity, length), points (name, MD, TVD) or numbers (a list of readings).
 # Optional inputs may be left blank: a blank MD means a vertical well (MD = TVD).
 WW = "Wait and Weight only"
@@ -78,7 +81,7 @@ FORMS = {
     VOLUMETRIC: [
         ("title", "Title", "text", False),
         ("original_mud_weight_ppg", "Mud weight", "ppg", False),
-        ("kill_mud_weight_ppg", "Kill mud weight (lubricate and bleed)", "ppg", False),
+        ("kill_mud_weight_ppg", "Mud lubricated in L&B (original mud for a swabbed kick)", "ppg", False),
         ("td_md_ft", "TD MD (blank = vertical)", "ft", True),
         ("td_tvd_ft", "TD TVD (blank = vertical)", "ft", True),
         ("shoe_tvd_ft", "Shoe TVD", "ft", False),
@@ -86,9 +89,14 @@ FORMS = {
         ("lot_pressure_psi", "Leak-off test pressure", "psi", False),
         ("test_mud_weight_ppg", "Leak-off test mud weight", "ppg", False),
         ("sicp_psi", "SICP", "psi", False),
+        ("pit_gain_bbl", "Pit gain (the forecast needs it)", "bbl", False),
+        ("pipe_bottom_md_ft", "Pipe bottom MD (blank = out of the hole, TD = on bottom)", "ft", True),
+        ("float_in_string", "Float in the string", "yesno", False),
+        ("sidpp_psi", "SIDPP (on bottom, no float - otherwise Pf is estimated)", "psi", True),
         ("safety_margin_psi", "Safety margin, team's choice", "psi", False),
         ("working_pressure_psi", "Working pressure, team's choice", "psi", False),
-        ("capacity_choice", "Annular capacity used", [SMALLEST, AVERAGE, LONGEST], False),
+        ("shoe_margin_psi", "Shoe margin below fracture, team's choice (0 if none)", "psi", True),
+        ("capacity_choice", "Bleed per cycle sized on", [ANNULUS_AT_THE_GAS, SMALLEST, AVERAGE, LONGEST], False),
         ("key_points", "Key points (KOP, end of build, heel)", "points", True),
         ("annulus_bottom_up", "Annulus, bottom up (include sections with no pipe)", "sections", False),
         ("sicp_rises_after_each_cycle", "Readings: SICP rise over the 15-minute wait, each cycle", "numbers", False),

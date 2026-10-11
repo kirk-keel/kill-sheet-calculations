@@ -267,3 +267,219 @@ def reference_plot(well, method):
         "influx": w.influx(),
         "fracture": w.fracture,
     }
+
+
+# =============================================================================
+# Volumetric method - reference (oracle) for killsheet.volumetric_model
+# =============================================================================
+#
+# Worked out with the user, cycle by cycle (v1.3). Single bubble, Boyle at the
+# TOP of the bubble, positions by MD, pressures by TVD:
+#
+#   Influx height      pit gain / capacity, from TD up (MD); then its TVD height
+#   Pf                 SIDPP + mud x TD TVD when SIDPP is known; otherwise
+#                      ESTIMATED: SICP + mud x (TD TVD - h) + 0.1 x h
+#   Gas gradient       from the gauges with SIDPP; 0.1 psi/ft otherwise
+#   K                  P0 x pit gain, P0 = Pf - gas gradient x h (Pf at the heel
+#                      when the influx lies in the lateral)
+#   Gas at casing C,   P = K / V (V = pit gain + bbl bled); gas top TVD =
+#   volume V           (P - C) / mud gradient; bottom from the capacities
+#   Bleed per cycle    on the SMALLEST annulus the gas touches anywhere along its
+#                      path (end of the last bleed through the end of this one);
+#                      the largest capacity that still satisfies that is used
+#   Hold               standard = SICP + SF + n x Pw, RE-BASED after a shoe-limited
+#                      cycle (tier 2-4) to the hold used + Pw; the hold to use is raised
+#                      (never lowered) until the forecast BHP through the coming bleed
+#                      is >= Pf + SF
+#   Shoe limit         fracture - shoe margin (team's choice, default 0)
+#   Shoe tiers         1 corrected hold keeps the shoe <= fracture
+#                      2 shoe-limited hold keeps BHP >= Pf + SF
+#                      3 shoe-limited hold keeps BHP between Pf and Pf + SF (SF reduced)
+#                      4 shoe-limited hold puts BHP below Pf: SUPERVISOR DECISION,
+#                        the BHP-keeping hold is printed (constant-BHP doctrine)
+#   Gas at surface     in a wait when P <= the hold; in a bleed when P falls to it
+
+LATERAL_GAS_GRADIENT = 0.1
+
+
+def round_down_tenth(value):
+    return math.floor(round(value * 10, 6)) / 10
+
+
+class ReferenceVolumetric:
+    """One volumetric example well (its WELL dict, plus pit gain / SIDPP)."""
+
+    def __init__(self, well):
+        self.annulus = [(c, l) for _n, c, l in well["annulus_bottom_up"]]          # bottom up
+        self.td_md = well.get("td_md_ft") or sum(l for _c, l in self.annulus)
+        self.td_tvd = well.get("td_tvd_ft") or self.td_md
+        self.shoe_tvd = well["shoe_tvd_ft"]
+        self.shoe_md = well.get("shoe_md_ft") or self.shoe_tvd
+        self.path = sorted({(0, 0), (self.shoe_md, self.shoe_tvd), (self.td_md, self.td_tvd)}
+                           | {(md, tvd) for _n, md, tvd in well.get("key_points", ())})
+        self.mud = four(0.052 * well["original_mud_weight_ppg"])
+        self.sicp, self.sidpp = well["sicp_psi"], well.get("sidpp_psi")
+        self.sf, self.pw, self.pit = well["safety_margin_psi"], well["working_pressure_psi"], well["pit_gain_bbl"]
+        mamw = max_allowable_mud_weight(well["lot_pressure_psi"], self.shoe_tvd, well["test_mud_weight_ppg"])
+        self.fracture = math.floor(round(0.052 * mamw * self.shoe_tvd, 6))
+        self.maasp = math.floor(round((mamw - well["original_mud_weight_ppg"]) * 0.052 * self.shoe_tvd, 6))
+        self.shoe_margin = well.get("shoe_margin_psi", 0)
+        self.limit = self.fracture - self.shoe_margin
+        self.sections_down = []                      # (top MD, bottom MD, capacity), top down
+        md = self.td_md
+        for c, l in self.annulus:
+            self.sections_down.insert(0, (md - l, md, c))
+            md -= l
+
+    def tvd(self, md):
+        if md <= 0:
+            return md
+        for (md1, tvd1), (md2, tvd2) in zip(self.path, self.path[1:]):
+            if md1 <= md <= md2:
+                return whole(tvd1 + (md - md1) * (tvd2 - tvd1) / (md2 - md1))
+        raise ValueError(md)
+
+    def md_at_tvd(self, tvd):
+        """Shallowest MD at a TVD (the heel, for the TVD of a lateral)."""
+        for (md1, tvd1), (md2, tvd2) in zip(self.path, self.path[1:]):
+            if tvd1 <= tvd <= tvd2 and tvd2 > tvd1:
+                return md1 + (tvd - tvd1) * (md2 - md1) / (tvd2 - tvd1)
+        return min(md for md, t in self.path if t == self.td_tvd)
+
+    def bottom_of(self, top_md, bbl):
+        for top, bottom, c in self.sections_down:
+            if top_md < bottom:
+                frm = max(top_md, top)
+                if bbl <= (bottom - frm) * c:
+                    return frm + bbl / c
+                bbl -= (bottom - frm) * c
+        return self.td_md
+
+    def capacities(self, top_md, bottom_md):
+        return [c for top, bottom, c in self.sections_down if top < bottom_md and bottom > top_md]
+
+
+def reference_volumetric(well):
+    """The forecast, cycle by cycle - see the notes above. Returns a dict."""
+    w = ReferenceVolumetric(well)
+    bbl, h = w.pit, 0.0                                         # influx at TD
+    for c, l in w.annulus:
+        if bbl <= c * l:
+            h += bbl / c
+            break
+        bbl -= c * l
+        h += l
+    h_md = whole(h)
+    h_tvd = w.td_tvd - w.tvd(w.td_md - h_md)
+    lateral = h_tvd == 0
+    if w.sidpp is not None:
+        pf, estimated = w.sidpp + whole(w.mud * w.td_tvd), False
+        g0 = LATERAL_GAS_GRADIENT if lateral else four(w.mud - four((w.sicp - w.sidpp) / h_tvd))
+    else:
+        g0, estimated = LATERAL_GAS_GRADIENT, True
+        pf = whole(w.sicp + w.mud * (w.td_tvd - h_tvd) + g0 * h_tvd)
+    p0 = pf - g0 * h_tvd
+    k = p0 * w.pit
+    heel = w.md_at_tvd(w.td_tvd)
+
+    def state(casing, v):
+        p = k / v
+        top_tvd = (p - casing) / w.mud
+        if top_tvd <= 0:
+            return None
+        g = g0 * p / p0
+        top = heel if top_tvd >= w.td_tvd else w.md_at_tvd(top_tvd)
+        bottom = w.bottom_of(top, v)
+        layers = [(0, top, w.mud), (top, bottom, g), (bottom, w.td_md, w.mud)]
+
+        def hydro(down_to):
+            return sum(gr * (w.tvd(min(b, down_to)) - w.tvd(t)) for t, b, gr in layers if t < down_to)
+        return {"top": top, "bottom": bottom, "top_tvd": w.tvd(top), "bhp": casing + hydro(w.td_md),
+                "shoe": casing + hydro(w.shoe_md)}
+
+    caps = sorted({c for c, _l in w.annulus})
+
+    def bleed_at(hold, v, prev_bottom):
+        here = state(hold, v)
+        pick = caps[0]
+        for c in caps:
+            b = round_down_tenth(w.pw / w.mud * c)
+            end = state(hold, tenth(v + b))
+            lo = end["top"] if end else 0
+            hi = max(prev_bottom, here["bottom"], end["bottom"] if end else 0)
+            if min(w.capacities(lo, hi)) >= c:
+                pick = c
+        return pick, round_down_tenth(w.pw / w.mud * pick)
+
+    def through(hold, v, b):
+        """Lowest BHP and highest shoe from the start to the end of a bleed (every 0.1 bbl)."""
+        states = [state(hold, tenth(v + x / 10)) for x in range(0, whole(b * 10) + 1)]
+        states = [s for s in states if s]
+        return min(s["bhp"] for s in states), max(s["shoe"] for s in states)
+
+    # the path starts at the bubble: at TD, or at the heel when the influx lies in the lateral
+    start_bottom = w.bottom_of(heel, w.pit) if lateral else w.td_md
+    cycles, bled, prev_bottom, used, surface = [], 0.0, start_bottom, None, None
+    standard, rebase = None, False
+    n = 0
+    while True:
+        n += 1
+        v = tenth(w.pit + bled)
+        base = w.sicp + w.sf + w.pw if used is None else used + w.pw
+        standard = base if (standard is None or rebase) else standard + w.pw
+        if k / v <= base:                                       # gas reaches surface in the wait
+            surface = {"cycle": n - 1, "during": "wait", "casing": whole(k / v), "bled": bled, "volume": tenth(v)}
+            break
+        hold = base
+        for _ in range(20):                                     # raise to keep BHP >= Pf + SF
+            if k / v <= hold or state(hold, v) is None:
+                break
+            _cap, b = bleed_at(hold, v, prev_bottom)
+            low, _high = through(hold, v, b)
+            short = math.ceil(round(pf + w.sf - low, 6))
+            if short <= 0:
+                break
+            hold += short
+        if k / v <= hold:
+            surface = {"cycle": n - 1, "during": "wait", "casing": whole(k / v), "bled": bled, "volume": tenth(v)}
+            break
+        corrected = hold
+        cap, b = bleed_at(corrected, v, prev_bottom)
+        low, high = through(corrected, v, b)
+        tier, decision = (1 if corrected > base else 0), None
+        if high > w.limit:
+            limited, high_l = corrected, high
+            for _ in range(20):                                 # step down until the shoe is at the limit
+                limited -= math.ceil(round(high_l - w.limit, 6))
+                cap_l, b_l = bleed_at(limited, v, prev_bottom)
+                low_l, high_l = through(limited, v, b_l)
+                if high_l <= w.limit:
+                    break
+            if low_l >= pf + w.sf:
+                tier, hold, cap, b, low, high = 2, limited, cap_l, b_l, low_l, high_l
+            elif low_l >= pf:
+                tier, hold, cap, b, low, high = 3, limited, cap_l, b_l, low_l, high_l
+            else:
+                tier = 4
+                decision = {"bhp_hold": corrected, "bhp_low_vs_pf": whole(low - pf),
+                            "shoe_over": whole(high - w.limit), "shoe_hold": limited,
+                            "shoe_hold_bhp_vs_pf": whole(low_l - pf)}
+        here = state(hold, v)
+        row = {"cycle": n, "standard": standard, "hold": hold, "correction": corrected - base,
+               "tier": tier, "capacity": cap, "bleed": b, "gas_top_tvd": here["top_tvd"],
+               "gas_below_shoe": here["top"] > w.shoe_md, "low_bhp_vs_pf": whole(low - pf),
+               "high_shoe": whole(high), "decision": decision}
+        if k / tenth(v + b) <= hold:                            # gas reaches surface in this bleed
+            row["total"] = tenth(bled + b)
+            cycles.append(row)
+            surface = {"cycle": n, "during": "bleed", "casing": hold, "bled": tenth(k / hold - w.pit),
+                       "volume": tenth(k / hold)}
+            break
+        bled = tenth(bled + b)
+        row["total"] = bled
+        cycles.append(row)
+        prev_bottom = state(hold, tenth(w.pit + bled))["bottom"]
+        used, rebase = hold, tier >= 2
+    return {"pf": pf, "pf_estimated": estimated, "influx_md": h_md, "influx_tvd": h_tvd, "gradient": g0,
+            "cycles": cycles, "surface": surface, "fracture": w.fracture, "maasp": w.maasp,
+            "precheck": w.sf + w.pw >= w.maasp - w.sicp - w.shoe_margin}
