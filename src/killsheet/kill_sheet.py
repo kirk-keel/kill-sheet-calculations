@@ -22,14 +22,18 @@ from killsheet.formulas import (
     max_allowable_mud_weight,
 )
 from killsheet.kill_plot import MODEL_LIMITS, drillers_kill_plot, wait_and_weight_kill_plot
+from killsheet.rounding import round_to_tenth
 from killsheet.lubricate_and_bleed import cycles_past_kop, kill_mud_column_ft, lubricate_and_bleed_table
 from killsheet.schedule import TEN_STEPS, pressure_schedule
 from killsheet.strokes import (
     bit_to_shoe_strokes,
     bit_to_surface_strokes,
     check_section_lengths,
+    section_volume,
+    strokes_for_volume,
     strokes_to_length,
     surface_to_bit_strokes,
+    total_volume,
 )
 from killsheet.volumetric import (
     SMALLEST,
@@ -66,6 +70,53 @@ def depth_rows(rows, survey):
     for name, md_ft in rows:
         by_md.setdefault(md_ft, []).append(name)
     return [(" / ".join(names), md_ft, tvd_at_md(md_ft, survey)) for md_ft, names in by_md.items()]
+
+
+def section_depths(sections, top_md_ft=0, down=True):
+    """Each section's name, top and bottom MD (ft) and rounded volume (bbl), for the schematic.
+
+    down=True: listed top down from top_md_ft (drill string).
+    down=False: listed bottom up from top_md_ft, here the BOTTOM (annulus from the bit up).
+    """
+    rows = []
+    md_ft = top_md_ft
+    for name, capacity, length in sections:
+        top, bottom = (md_ft, md_ft + length) if down else (md_ft - length, md_ft)
+        rows.append({"name": name, "top_md_ft": top, "bottom_md_ft": bottom,
+                     "volume_bbl": section_volume(capacity, length)})
+        md_ft = bottom if down else top
+    return rows
+
+
+def volume_table(string, open_hole, cased_hole, pump_output_bbl_per_stk, surface_line_volume_bbl,
+                 surface_to_bit_stks, bit_to_shoe_stks, bit_to_surface_stks):
+    """Volumes (bbl, rounded to 0.1) and strokes for page 1 of the kill sheet.
+
+        Volume  = sum of each section's rounded volume
+        Strokes = Volume / Pump output (whole strokes)
+    The total well system follows the same rule (user rule: a stroke can't be split), so
+    it can be a stroke off Surface to bit + Bit to surface (baseline 6,185 vs 6,184).
+    """
+    string_bbl = total_volume(string)
+    surface_to_bit_bbl = round_to_tenth(surface_line_volume_bbl + string_bbl)
+    open_hole_bbl = total_volume(open_hole)
+    cased_hole_bbl = total_volume(cased_hole)
+    annulus_bbl = total_volume(open_hole + cased_hole)
+    total_bbl = round_to_tenth(surface_to_bit_bbl + annulus_bbl)
+    rows = []
+    if surface_line_volume_bbl:
+        rows.append(("Surface lines", surface_line_volume_bbl,
+                     strokes_for_volume(surface_line_volume_bbl, pump_output_bbl_per_stk)))
+        rows.append(("Drill string", string_bbl, strokes_for_volume(string_bbl, pump_output_bbl_per_stk)))
+    rows += [
+        ("Surface to bit", surface_to_bit_bbl, surface_to_bit_stks),
+        ("Open hole annulus (bit to shoe)", open_hole_bbl, bit_to_shoe_stks),
+        ("Cased hole annulus (shoe to surface)", cased_hole_bbl,
+         strokes_for_volume(cased_hole_bbl, pump_output_bbl_per_stk)),
+        ("Total annulus (bit to surface)", annulus_bbl, bit_to_surface_stks),
+        ("Total well system", total_bbl, strokes_for_volume(total_bbl, pump_output_bbl_per_stk)),
+    ]
+    return [{"name": name, "volume_bbl": bbl, "strokes": stks} for name, bbl, stks in rows]
 
 
 def kill_sheet(
@@ -177,6 +228,14 @@ def kill_sheet(
         "schedule": None,
     }
     btsurf = sheet["bit_to_surface_strokes"]
+    sheet["volumes"] = volume_table(string, open_hole, without_names(cased_hole_annulus), pump,
+                                    surface_line_volume_bbl, stb, sheet["bit_to_shoe_strokes"], btsurf)
+    sheet["schematic"] = {
+        "bit_md_ft": bit_md_ft, "bit_tvd_ft": bit_tvd_ft, "shoe_md_ft": shoe_md_ft, "shoe_tvd_ft": shoe_tvd_ft,
+        "key_points": [{"name": name, "md_ft": md, "tvd_ft": tvd} for name, md, tvd in key_points],
+        "string": section_depths(drill_string),
+        "annulus": section_depths(open_hole_annulus + cased_hole_annulus, bit_md_ft, down=False),
+    }
 
     if pit_gain_bbl is not None and pit_gain_bbl <= 0:
         raise ValueError("Pit gain must be greater than 0 bbl.")

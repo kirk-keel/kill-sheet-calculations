@@ -406,7 +406,7 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
 first, (3) the volumetric plot.
 
-Web page sub-phases (user-approved; stop after each). DONE: W1, W2, W3. W1 plumbing - Pyodide page, Pages
+Web page sub-phases (user-approved; stop after each). DONE: W1, W2, W3, W4. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
 W2 example wells as a tested data module + dropdown + editable inputs + tables with an
 "Actual" column (Driller's, W&W, volumetric + L&B). W3 kill plot SVG - VERTICAL wells only
@@ -414,7 +414,12 @@ W2 example wells as a tested data module + dropdown + editable inputs + tables w
 `pit_gain_bbl` on kill_sheet() (no pit gain = no plot); sheet["plot"] from kill_plot.py;
 the 12 Driller's/W&W examples carry pit_gain_bbl=10 (not printed - printed output unchanged).
 The vertical TAPERED example at 10 bbl gives the "suggests liquid" warning (0.2583 psi/ft) -
-the tapered plot has no hand example yet. W4 page 1 well schematic +
+the tapered plot has no hand example yet. W4 as built: kill_sheet() adds "volumes" (surface lines and
+drill string if lines given, surface to bit, open hole, cased hole, total annulus, total well system;
+volume = sum of rounded sections, strokes = volume / pump - total well system too (user: "can't
+have .6 of a stroke": 723.6 / 0.117 = 6,185, not 1,627 + 4,557 = 6,184)) and "schematic" (section top/bottom MD).
+Schematic drawn straight, to scale by MD (not the well path); points at the same MD share a label.
+Volumetric sheets have no schematic yet. W4 page 1 well schematic +
 summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with the web page).
 
 ## Git / GitHub

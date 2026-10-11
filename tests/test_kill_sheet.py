@@ -152,3 +152,34 @@ def test_deviated_well_plot_is_coming_later():
 def test_pit_gain_must_be_more_than_0():
     with pytest.raises(ValueError, match="Pit gain"):
         kill_sheet(**BASELINE, pit_gain_bbl=0)
+
+
+def test_volumes_page_1():
+    # Each volume = sum of rounded section volumes; strokes = volume / 0.117
+    volumes = [(v["name"], v["volume_bbl"], v["strokes"]) for v in kill_sheet(**BASELINE)["volumes"]]
+    assert volumes == [
+        ("Surface to bit", 190.4, 1627),                         # 178.0 + 7.8 + 4.6
+        ("Open hole annulus (bit to shoe)", 281.4, 2405),        # 17.5 + 41.3 + 222.6
+        ("Cased hole annulus (shoe to surface)", 251.8, 2152),   # 0.0489 x 5,150
+        ("Total annulus (bit to surface)", 533.2, 4557),
+        ("Total well system", 723.6, 6185),                      # 723.6 / 0.117 = 6,184.6 (not 1,627 + 4,557)
+    ]
+
+
+def test_volumes_with_surface_lines():
+    volumes = {v["name"]: (v["volume_bbl"], v["strokes"])
+               for v in kill_sheet(**BASELINE, surface_line_volume_bbl=5.0)["volumes"]}
+    assert volumes["Surface lines"] == (5.0, 43)                 # 5.0 / 0.117 = 42.7
+    assert volumes["Drill string"] == (190.4, 1627)
+    assert volumes["Surface to bit"] == (195.4, 1670)
+
+
+def test_schematic_sections():
+    schematic = kill_sheet(**BASELINE)["schematic"]
+    assert [(r["name"], r["top_md_ft"], r["bottom_md_ft"], r["volume_bbl"]) for r in schematic["string"]] == [
+        ('5" 19.5# DP', 0, 10_000, 178.0), ('5" HWDP', 10_000, 10_900, 7.8), ('6-1/2" DC', 10_900, 11_500, 4.6),
+    ]
+    assert [(r["top_md_ft"], r["bottom_md_ft"]) for r in schematic["annulus"]] == [
+        (10_900, 11_500), (10_000, 10_900), (5_150, 10_000), (0, 5_150),           # bit up
+    ]
+    assert (schematic["shoe_md_ft"], schematic["bit_md_ft"], schematic["key_points"]) == (5_150, 11_500, [])

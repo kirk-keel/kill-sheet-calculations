@@ -64,6 +64,19 @@
   .plot .dp { stroke: var(--dp); fill: none; stroke-width: 2; }
   .plot .casing { stroke: var(--casing); fill: none; stroke-width: 2; }
   .plot .maasp { stroke: var(--muted); stroke-dasharray: 6 4; }
+  .page1 { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .page1 { grid-template-columns: minmax(300px, 400px) 1fr; } }
+  .schematic svg { width: 100%; height: auto; display: block; }
+  .schematic text { fill: var(--ink); font-size: 11px; font-family: inherit; }
+  .schematic .sub { fill: var(--muted); }
+  .schematic .casing-wall { stroke: var(--ink); stroke-width: 3; }
+  .schematic .hole-wall { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 3; }
+  .schematic .mud { fill: var(--panel); }
+  .schematic .pipe { stroke: var(--ink); stroke-width: 1; }
+  .schematic .pipe-a { fill: var(--dp); opacity: 0.55; }
+  .schematic .pipe-b { fill: var(--dp); opacity: 0.85; }
+  .schematic .leader { stroke: var(--line); }
+  .schematic .point { stroke: var(--casing); stroke-dasharray: 3 3; }
   .legend { display: flex; flex-wrap: wrap; gap: 16px; margin: 6px 0; font-size: 0.9em; }
   .swatch { display: inline-block; width: 22px; height: 0; border-top: 3px solid; vertical-align: middle; margin-right: 6px; }
   #status { padding: 12px 0; }
@@ -203,6 +216,12 @@
       ["Bit to surface", int(s.bit_to_surface_strokes), "stks"],
       ["Safety margin (SF)", int(s.safety_margin_psi), "psi"],
     ]);
+    const volumes = table([["Volume"], ["bbl", "num"], ["Strokes", "num"]],
+      s.volumes.map(v => `<tr><td>${esc(v.name)}</td><td class="num">${dec(v.volume_bbl, 1)}</td>` +
+                         `<td class="num">${int(v.strokes)}</td></tr>`));
+    // Page 1: the schematic beside the key numbers and volumes.
+    html = `<h2>${esc(s.title)}</h2><div class="page1"><div>${drawSchematic(s.schematic)}</div>` +
+           `<div>${html.slice(html.indexOf("<table"))}<h3>Volumes</h3>${volumes}</div></div>`;
     html += drawPlot(s.plot);
     html += depthTable("Drill string, top down (kill mud)", s.string_depths);
     html += depthTable("Annulus, bit up", s.annulus_depths);
@@ -295,6 +314,72 @@
               `${s.passed_kop ? '<span class="flag">PASSED KOP</span>' : "stays above KOP"}</p>`;
     }
     return html;
+  }
+
+  // Spread label positions so they are at least `gap` apart, keeping their order.
+  function spread(ys, gap, top, bottom) {
+    const out = [];
+    ys.forEach((yv, i) => out.push(Math.max(yv, i ? out[i - 1] + gap : top)));
+    for (let i = out.length - 1; i >= 0; i--) {
+      out[i] = Math.min(out[i], i === out.length - 1 ? bottom : out[i + 1] - gap);
+    }
+    return out;
+  }
+
+  // Well schematic: drawn straight, to scale by MD (not the well path).
+  function drawSchematic(sc) {
+    const W = 400, H = 560, T = 24, B = 24, cx = 200;
+    const y = md => T + (H - T - B) * md / sc.bit_md_ft;
+    const hole = 30, casing = 24, pipe = 8;
+    const both = (md, tvd) => md === tvd ? `${int(md)} ft` : `${int(md)} MD / ${int(tvd)} TVD`;
+    let svg = `<rect class="mud" x="${cx - casing}" y="${y(0)}" width="${2 * casing}" height="${y(sc.shoe_md_ft) - y(0)}"/>` +
+              `<rect class="mud" x="${cx - hole}" y="${y(sc.shoe_md_ft)}" width="${2 * hole}" ` +
+              `height="${y(sc.bit_md_ft) - y(sc.shoe_md_ft)}"/>`;
+    for (const side of [-1, 1]) {
+      svg += `<line class="casing-wall" x1="${cx + side * casing}" x2="${cx + side * casing}" y1="${y(0)}" y2="${y(sc.shoe_md_ft)}"/>` +
+             `<polygon fill="var(--ink)" points="${cx + side * casing},${y(sc.shoe_md_ft) - 9} ` +
+             `${cx + side * (casing + 7)},${y(sc.shoe_md_ft)} ${cx + side * casing},${y(sc.shoe_md_ft)}"/>` +
+             `<line class="hole-wall" x1="${cx + side * hole}" x2="${cx + side * hole}" y1="${y(sc.shoe_md_ft)}" y2="${y(sc.bit_md_ft)}"/>`;
+    }
+    sc.string.forEach((sec, i) => {
+      svg += `<rect class="pipe pipe-${i % 2 ? "b" : "a"}" x="${cx - pipe}" y="${y(sec.top_md_ft)}" width="${2 * pipe}" ` +
+             `height="${Math.max(1, y(sec.bottom_md_ft) - y(sec.top_md_ft))}"><title>${esc(sec.name)}</title></rect>`;
+    });
+    const by = y(sc.bit_md_ft);
+    svg += `<polygon fill="var(--ink)" points="${cx - pipe - 3},${by - 6} ${cx + pipe + 3},${by - 6} ${cx + 4},${by} ${cx - 4},${by}"/>`;
+    // Right: each string section and the crossover at its bottom.
+    const right = sc.string.map(sec => ({
+      y: y((sec.top_md_ft + sec.bottom_md_ft) / 2),
+      text: sec.name, sub: `${int(sec.top_md_ft)}-${int(sec.bottom_md_ft)} ft MD, ${dec(sec.volume_bbl, 1)} bbl`,
+    }));
+    const ry = spread(right.map(r => r.y), 28, T + 6, H - B - 14);
+    right.forEach((r, i) => {
+      svg += `<line class="leader" x1="${cx + pipe + 2}" x2="${cx + hole + 18}" y1="${r.y}" y2="${ry[i]}"/>` +
+             `<text x="${cx + hole + 22}" y="${ry[i]}">${esc(r.text)}</text>` +
+             `<text class="sub" x="${cx + hole + 22}" y="${ry[i] + 12}">${esc(r.sub)}</text>`;
+    });
+    // Left: shoe, key points, bit - MD and TVD.
+    const left = [{md: sc.shoe_md_ft, tvd: sc.shoe_tvd_ft, name: "Shoe"},
+                  ...sc.key_points.map(k => ({md: k.md_ft, tvd: k.tvd_ft, name: k.name})),
+                  {md: sc.bit_md_ft, tvd: sc.bit_tvd_ft, name: "Bit"}].sort((a, b) => a.md - b.md)
+      .reduce((rows, l) => {                      // points at the same MD share one label
+        const last = rows[rows.length - 1];
+        if (last && last.md === l.md) last.name += " / " + l.name; else rows.push({...l});
+        return rows;
+      }, []);
+    const ly = spread(left.map(l => y(l.md)), 28, T + 6, H - B - 14);
+    left.forEach((l, i) => {
+      if (!["Shoe", "Bit"].includes(l.name.split(" / ")[0])) {
+        svg += `<line class="point" x1="${cx - hole - 6}" x2="${cx + hole + 6}" y1="${y(l.md)}" y2="${y(l.md)}"/>`;
+      }
+      svg += `<line class="leader" x1="${cx - hole - 2}" x2="${cx - hole - 18}" y1="${y(l.md)}" y2="${ly[i]}"/>` +
+             `<text x="${cx - hole - 22}" y="${ly[i]}" text-anchor="end">${esc(l.name)}</text>` +
+             `<text class="sub" x="${cx - hole - 22}" y="${ly[i] + 12}" text-anchor="end">${both(l.md, l.tvd)}</text>`;
+    });
+    svg += `<text class="sub" x="${cx}" y="${T - 8}" text-anchor="middle">Surface</text>`;
+    const straight = sc.key_points.length
+      ? `<p class="note">Drawn straight, to scale by MD - not the well path.</p>` : "";
+    return `<div class="schematic"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Well schematic">${svg}</svg></div>` + straight;
   }
 
   // A round step for the axis: 1, 2 or 5 x 10^n, giving about `count` divisions.
