@@ -11,7 +11,7 @@ Run it with:  python examples/bullhead_deviated_tapered_well.py
 
 from kill_sheet_printer import print_bullhead_sheet
 
-print_bullhead_sheet(
+WELL = dict(
     title="BULLHEAD - annular shut, down the string and the backside (deviated, tapered)",
     bit_md_ft=12_712,
     bit_tvd_ft=11_500,
@@ -49,3 +49,6 @@ print_bullhead_sheet(
         ('5" DP x 9-5/8" casing', 0.0489, 5_380),
     ],
 )
+
+if __name__ == "__main__":
+    print_bullhead_sheet(**WELL)

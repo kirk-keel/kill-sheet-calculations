@@ -11,7 +11,7 @@ Run it with:  python examples/reverse_circulation_horizontal_well.py
 
 from kill_sheet_printer import print_reverse_circulation_sheet
 
-print_reverse_circulation_sheet(
+WELL = dict(
     title="REVERSE CIRCULATION - CWI well, opened SSD above the packer (horizontal)",
     formation_pressure_psi=5_200,
     sitp_psi=1_800,
@@ -45,3 +45,6 @@ print_reverse_circulation_sheet(
     # Reading: annulus pressure once at kill rate (None until you have it)
     observed_icp_psi=1_250,
 )
+
+if __name__ == "__main__":
+    print_reverse_circulation_sheet(**WELL)

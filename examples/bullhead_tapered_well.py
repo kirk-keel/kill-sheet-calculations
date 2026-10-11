@@ -10,7 +10,7 @@ Run it with:  python examples/bullhead_tapered_well.py
 
 from kill_sheet_printer import print_bullhead_sheet
 
-print_bullhead_sheet(
+WELL = dict(
     title="BULLHEAD - annular shut, down the string and the backside (vertical, tapered)",
     bit_tvd_ft=11_500,
     shoe_tvd_ft=9_500,
@@ -45,3 +45,6 @@ print_bullhead_sheet(
         ('5" DP x 7" casing', 0.0140, 7_000),
     ],
 )
+
+if __name__ == "__main__":
+    print_bullhead_sheet(**WELL)

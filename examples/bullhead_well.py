@@ -9,7 +9,7 @@ Run it with:  python examples/bullhead_well.py
 
 from kill_sheet_printer import print_bullhead_sheet
 
-print_bullhead_sheet(
+WELL = dict(
     title="BULLHEAD - annular shut, down the string and the backside (vertical, untapered)",
     bit_tvd_ft=11_500,
     shoe_tvd_ft=5_150,
@@ -42,3 +42,6 @@ print_bullhead_sheet(
         ('DP x 9-5/8" casing', 0.0489, 5_150),
     ],
 )
+
+if __name__ == "__main__":
+    print_bullhead_sheet(**WELL)

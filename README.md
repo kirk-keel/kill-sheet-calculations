@@ -676,6 +676,7 @@ src/killsheet/
   bullhead.py    bullheading while drilling: limits for each side, equipment limit, chart
   reverse_circulation.py  reverse circulation kill for CWI wells
   kill_plot.py   kill plot: forecast drill pipe and casing pressure (single-bubble gas model)
+  kill_sheet.py  the whole kill sheet in one place - used by the printer and the web page
 tests/           one test file per module, plus a full kill sheet for each example
                  well; all hand-worked examples
 examples/
@@ -713,7 +714,7 @@ examples/
   kill_sheet_printer.py  prints a kill sheet (shared by both examples)
 web/
   index.html     the web page (draws the numbers, calculates nothing)
-  app.py         runs the killsheet package in the browser (Pyodide)
+  app.py         runs the killsheet package in the browser (Pyodide); the example wells and inputs
   build_site.py  builds the page into _site/
 .github/workflows/tests.yml   runs the tests on every push
 .github/workflows/pages.yml   publishes the web page, only after the tests pass

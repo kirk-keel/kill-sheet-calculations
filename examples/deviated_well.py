@@ -8,7 +8,7 @@ Run it with:  python examples/deviated_well.py
 
 from kill_sheet_printer import DRILLERS, print_kill_sheet
 
-print_kill_sheet(
+WELL = dict(
     title="KILL SHEET - deviated well, untapered string, surface BOP stack",
     method=DRILLERS,
     # Well path: bit, shoe and key points have MD and TVD
@@ -46,3 +46,6 @@ print_kill_sheet(
         ('DP x 9-5/8" casing', 0.0489, 5_380),
     ],
 )
+
+if __name__ == "__main__":
+    print_kill_sheet(**WELL)

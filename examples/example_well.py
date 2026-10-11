@@ -8,7 +8,7 @@ Run it with:  python examples/example_well.py
 
 from kill_sheet_printer import DRILLERS, WAIT_AND_WEIGHT, print_kill_sheet  # noqa: F401
 
-print_kill_sheet(
+WELL = dict(
     title="KILL SHEET - vertical well, untapered string, surface BOP stack",
     method=DRILLERS,
     # Well data
@@ -40,3 +40,6 @@ print_kill_sheet(
         ('DP x 9-5/8" casing', 0.0489, 5_150),
     ],
 )
+
+if __name__ == "__main__":
+    print_kill_sheet(**WELL)

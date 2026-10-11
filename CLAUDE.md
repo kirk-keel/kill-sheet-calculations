@@ -28,6 +28,8 @@ baseline must keep working and keep its tests.
   - `reverse_circulation.py` — reverse circulation kill for CWI wells
   - `schedule.py` — Wait and Weight drill pipe step-down schedule, by depth of kill mud
   - `kill_plot.py` — kill plot: single-bubble gas model, forecast DP and casing lines, shoe check
+  - `kill_sheet.py` — the whole Driller's / W&W / volumetric sheet as plain dicts (calls the
+    modules above, calculates nothing new); the printer AND the web page draw from it
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
 
@@ -404,7 +406,7 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
 first, (3) the volumetric plot.
 
-Web page sub-phases (user-approved; stop after each): W1 plumbing - Pyodide page, Pages
+Web page sub-phases (user-approved; stop after each). DONE: W1, W2. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
 W2 example wells as a tested data module + dropdown + editable inputs + tables with an
 "Actual" column (Driller's, W&W, volumetric + L&B). W3 kill plot SVG - VERTICAL wells only
@@ -440,7 +442,11 @@ python -m http.server --directory _site   # try it at http://localhost:8000
 ```
 
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each
-example file is just the well data. Sections in the examples are
+example file is just the well data: `WELL = dict(...)`, printed under
+`if __name__ == "__main__":`. The web page reads the same WELL data (web/app.py
+EXAMPLE_WELLS lists the 22 Driller's / W&W / volumetric wells in the dropdown; FORMS
+lists every input). After any printer/sheet change, every example's output must be
+byte-identical unless the user approved the change. Sections in the examples are
 `(name, capacity, length)`; the name is for printing only.
 If you change an example well or the output format, update the "Example output"
 section of README.md to match.

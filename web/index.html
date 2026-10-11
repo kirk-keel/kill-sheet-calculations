@@ -5,26 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kill Sheet Calculator</title>
 <style>
-  :root { --ink: #1b1f24; --muted: #5b6470; --line: #d6dbe1; --head: #eef1f4; --bg: #ffffff; --link: #0b5cad; }
+  :root { --ink: #1b1f24; --muted: #5b6470; --line: #d6dbe1; --head: #eef1f4; --bg: #ffffff;
+          --panel: #f7f8fa; --link: #0b5cad; --warn-bg: #fff4e5; --warn-ink: #8a4b00;
+          --err-bg: #fdecea; --err-ink: #a61b1b; --input-bg: #ffffff; }
   @media (prefers-color-scheme: dark) {
-    :root { --ink: #e6e9ed; --muted: #9aa4b0; --line: #3a414a; --head: #23282e; --bg: #16191d; --link: #7cb7ff; }
+    :root { --ink: #e6e9ed; --muted: #9aa4b0; --line: #3a414a; --head: #23282e; --bg: #16191d;
+            --panel: #1d2126; --link: #7cb7ff; --warn-bg: #3a2a12; --warn-ink: #ffcf8a;
+            --err-bg: #3d1c1c; --err-ink: #ffaaaa; --input-bg: #121518; }
   }
+  * { box-sizing: border-box; }
   body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
          font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 900px; margin: 0 auto; }
+  main { max-width: 1280px; margin: 0 auto; }
   h1 { font-size: 1.4rem; margin: 0 0 4px; }
-  h2 { font-size: 1.1rem; margin: 24px 0 8px; }
-  .muted { color: var(--muted); }
+  h2 { font-size: 1.15rem; margin: 0 0 8px; }
+  h3 { font-size: 1rem; margin: 20px 0 6px; }
   a { color: var(--link); }
+  .muted { color: var(--muted); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0 16px; }
+  .bar select { flex: 1 1 320px; max-width: 520px; }
+  select, input, button { font: inherit; color: var(--ink); background: var(--input-bg);
+                          border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
+  button { cursor: pointer; background: var(--head); }
+  .layout { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 1100px) { .layout { grid-template-columns: 400px 1fr; align-items: start; } }
+  #inputs { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+  .field { display: grid; grid-template-columns: 1fr 120px 52px; gap: 6px; align-items: center; margin: 4px 0; }
+  .field label { font-size: 0.92em; }
+  .field input, .field select { width: 100%; }
+  .field.choice { grid-template-columns: 1fr 172px; }
+  .field.wide { grid-template-columns: 1fr; }
+  .unit { color: var(--muted); font-size: 0.85em; }
+  .group { margin: 12px 0 4px; }
+  .group-title { font-weight: 600; font-size: 0.92em; margin-bottom: 4px; }
+  .rows input { width: 100%; }
+  .rows td { padding: 2px; border: none; }
+  .rows th { padding: 2px 4px; border: none; background: none; font-weight: 500; font-size: 0.8em; color: var(--muted); }
   table { border-collapse: collapse; width: 100%; }
-  th, td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+  th, td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; }
   th { background: var(--head); }
-  td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .summary { max-width: 460px; }
-  .note { color: var(--muted); font-size: 0.9em; }
+  td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .summary { max-width: 480px; }
+  .note { color: var(--muted); font-size: 0.88em; }
   .wrap { overflow-x: auto; }
+  input.actual { width: 80px; text-align: right; }
+  .box { border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+  .warn { background: var(--warn-bg); color: var(--warn-ink); }
+  .error { background: var(--err-bg); color: var(--err-ink); }
+  .flag { color: var(--warn-ink); font-weight: 600; }
   #status { padding: 12px 0; }
-  #status.error { color: #c0392b; }
 </style>
 </head>
 <body>
@@ -34,56 +63,300 @@
     The calculations run in your browser using the same tested Python code as the
     <a href="https://github.com/kirk-keel/kill-sheet-calculations">project on GitHub</a>.</p>
   <div id="status">Loading the calculator (a few seconds the first time)...</div>
-  <div id="sheet"></div>
+  <div id="app" hidden>
+    <div class="bar">
+      <label for="well">Example well</label>
+      <select id="well"></select>
+      <button id="reset" type="button">Reset to the example</button>
+    </div>
+    <div class="layout">
+      <section id="inputs" aria-label="Well data"></section>
+      <section id="results" aria-label="Kill sheet"></section>
+    </div>
+  </div>
 </main>
 <script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
 <script>
-  // The page only draws: every number comes from the killsheet Python package.
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  // The page only draws: every number comes from the killsheet Python package
+  // (web/app.py -> killsheet.kill_sheet). Nothing is calculated in JavaScript.
+  let pyodide, wells, forms, well, inputs, actuals = {}, timer;
+
+  const esc = text => String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+  const int = n => n.toLocaleString("en-US");
+  const dec = (n, places) => n.toFixed(places);
+  const clone = value => JSON.parse(JSON.stringify(value));
+
+  // ---------- Inputs ----------
+
+  function drawInputs() {
+    const isWW = inputs.method === "Wait and Weight";
+    let html = "";
+    for (const [name, label, type, optional] of forms[well.kind]) {
+      if (optional === "Wait and Weight only" && !isWW) continue;
+      const value = inputs[name];
+      if (Array.isArray(type)) {
+        const options = type.map(choice =>
+          `<option${choice === (value ?? type[0]) ? " selected" : ""}>${esc(choice)}</option>`).join("");
+        html += `<div class="field choice"><label for="f-${name}">${esc(label)}</label>` +
+                `<select id="f-${name}" data-name="${name}" data-type="choice">${options}</select></div>`;
+      } else if (type === "text") {
+        html += `<div class="field wide"><label for="f-${name}">${esc(label)}</label>` +
+                `<input id="f-${name}" data-name="${name}" data-type="text" value="${esc(value ?? "")}"></div>`;
+      } else if (type === "numbers") {
+        html += `<div class="field wide"><label for="f-${name}">${esc(label)} <span class="unit">(comma separated)</span></label>` +
+                `<input id="f-${name}" data-name="${name}" data-type="numbers" value="${esc((value ?? []).join(", "))}"></div>`;
+      } else if (type === "sections" || type === "points") {
+        const heads = type === "sections" ? ["Name", "Capacity bbl/ft", "Length ft"] : ["Name", "MD ft", "TVD ft"];
+        const rows = (value ?? []).map((row, i) =>
+          `<tr>${row.map((cell, j) => `<td><input data-name="${name}" data-type="${type}" data-row="${i}" data-col="${j}"` +
+            ` ${j ? 'inputmode="decimal"' : ""} aria-label="${esc(heads[j])}" value="${esc(cell)}"></td>`).join("")}` +
+          `<td><button type="button" data-remove="${name}" data-row="${i}" aria-label="Remove row">&times;</button></td></tr>`).join("");
+        html += `<div class="group"><div class="group-title">${esc(label)}</div>` +
+                `<table class="rows"><tr>${heads.map(h => `<th>${h}</th>`).join("")}<th></th></tr>${rows}</table>` +
+                `<button type="button" data-add="${name}" data-cols="3">+ add row</button></div>`;
+      } else {
+        html += `<div class="field"><label for="f-${name}">${esc(label)}</label>` +
+                `<input id="f-${name}" data-name="${name}" data-type="number" inputmode="decimal" value="${esc(value ?? "")}">` +
+                `<span class="unit">${esc(type)}</span></div>`;
+      }
+    }
+    document.getElementById("inputs").innerHTML = html;
   }
 
-  function drawSheet(sheet) {
-    const summaryRows = sheet.summary.map(([name, value, unit]) =>
-      `<tr><td>${escapeHtml(name)}</td><td class="num">${escapeHtml(value)}</td><td>${escapeHtml(unit)}</td></tr>`
-    ).join("");
-    let circulation = null;
-    const stepRows = sheet.steps.map(step => {
-      let head = "";
-      if (step.circulation !== circulation) {
-        circulation = step.circulation;
-        head = `<tr><th colspan="5">${escapeHtml(circulation)}</th></tr>`;
+  function readField(element) {
+    const {name, type} = element.dataset;
+    const text = element.value.trim();
+    if (type === "text" || type === "choice") {
+      inputs[name] = element.value;
+    } else if (type === "number") {
+      if (text === "") delete inputs[name]; else inputs[name] = Number(text);
+    } else if (type === "numbers") {
+      inputs[name] = text === "" ? [] : text.split(/[,\s]+/).filter(Boolean).map(Number);
+    } else {
+      const col = Number(element.dataset.col);
+      inputs[name][Number(element.dataset.row)][col] = col === 0 ? element.value : Number(text);
+    }
+  }
+
+  function checkInputs() {
+    const isWW = inputs.method === "Wait and Weight";
+    for (const [name, label, type, optional] of forms[well.kind]) {
+      if (optional === "Wait and Weight only" && !isWW) continue;
+      const value = inputs[name];
+      if (type !== "text" && !Array.isArray(type) && !optional && (value == null || value === "")) {
+        return `Enter ${label}.`;
       }
-      // No pressure: held "constant" on shut-down, blank for bleed / flow check (as printed)
-      const psi = step.hold_psi !== null ? step.hold_psi.toLocaleString("en-US")
-        : step.stage === "shut-down" ? "constant" : "";
-      const stks = step.strokes === null ? "" : step.strokes.toLocaleString("en-US");
-      return head + `<tr><td>${escapeHtml(step.stage)}</td><td>${escapeHtml(step.gauge)}</td>` +
-        `<td class="num">${escapeHtml(psi)}</td><td class="num">${escapeHtml(stks)}</td>` +
-        `<td class="note">${escapeHtml(step.note)}</td></tr>`;
-    }).join("");
-    document.getElementById("sheet").innerHTML = `
-      <h2>${escapeHtml(sheet.title)}</h2>
-      <table class="summary">${summaryRows}</table>
-      <h2>${escapeHtml(sheet.method)}</h2>
-      <div class="wrap"><table>
-        <tr><th>Stage</th><th>Gauge</th><th>psi</th><th>Strokes</th><th>Note</th></tr>
-        ${stepRows}
-      </table></div>`;
+      const numbers = type === "numbers" ? value : (type === "sections" || type === "points")
+        ? (value ?? []).flatMap(row => row.slice(1)) : [value];
+      if (type !== "text" && !Array.isArray(type) && numbers.some(n => n != null && !Number.isFinite(n))) {
+        return `${label}: enter numbers only.`;
+      }
+    }
+    return null;
+  }
+
+  // ---------- Results ----------
+
+  function actualCell(key) {
+    return `<td><input class="actual" inputmode="decimal" aria-label="Actual" data-actual="${key}" value="${esc(actuals[key] ?? "")}"></td>`;
+  }
+
+  function table(heads, rows) {
+    return `<div class="wrap"><table><tr>${heads.map(([h, cls]) => `<th class="${cls ?? ""}">${h}</th>`).join("")}</tr>` +
+           rows.join("") + `</table></div>`;
+  }
+
+  function summary(rows) {
+    return `<table class="summary">${rows.map(([name, value, unit]) =>
+      `<tr><td>${esc(name)}</td><td class="num">${value}</td><td>${unit}</td></tr>`).join("")}</table>`;
+  }
+
+  function depthTable(title, rows) {
+    return `<h3>${title}</h3>` + table([["Point"], ["MD ft", "num"], ["TVD ft", "num"], ["Strokes", "num"]],
+      rows.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${int(r.md_ft)}</td>` +
+                    `<td class="num">${int(r.tvd_ft)}</td><td class="num">${int(r.strokes)}</td></tr>`));
+  }
+
+  function drawKillSheet(s) {
+    let html = `<h2>${esc(s.title)}</h2>` + summary([
+      ["Kill mud weight", dec(s.kill_mud_weight_ppg, 1), "ppg"],
+      ["Initial circulating pressure", int(s.icp_psi), "psi"],
+      ["Final circulating pressure", int(s.fcp_psi), "psi"],
+      ["Max allowable mud weight", dec(s.max_allowable_mud_weight_ppg, 1), "ppg"],
+      ["MAASP (original mud)", int(s.maasp_original_psi), "psi"],
+      ["MAASP (after kill)", int(s.maasp_after_kill_psi), "psi"],
+      ["Surface to bit", int(s.surface_to_bit_strokes), "stks"],
+      ["Bit to shoe", int(s.bit_to_shoe_strokes), "stks"],
+      ["Bit to surface", int(s.bit_to_surface_strokes), "stks"],
+      ["Safety margin (SF)", int(s.safety_margin_psi), "psi"],
+    ]);
+    html += depthTable("Drill string, top down (kill mud)", s.string_depths);
+    html += depthTable("Annulus, bit up", s.annulus_depths);
+    html += `<h3>${esc(s.method)}</h3>`;
+    if (s.icp_check) {
+      html += `<div class="box warn">ICP check at kill rate: ICP + SF ${int(s.icp_check.icp_plus_sf_psi)} psi, ` +
+              `drill pipe reads ${int(s.icp_check.observed_psi)} psi - ${esc(s.icp_check.message)}</div>`;
+    }
+    let circulation = null;
+    html += table([["Stage"], ["Gauge"], ["psi", "num"], ["Strokes", "num"], ["Actual"], ["Note"]],
+      s.steps.map((step, i) => {
+        let head = "";
+        if (step.circulation !== circulation) {
+          circulation = step.circulation;
+          head = `<tr><th colspan="6">${esc(circulation)}</th></tr>`;
+        }
+        // No pressure: held "constant" on shut-down, blank for bleed / flow check (as printed)
+        const psi = step.hold_psi !== null ? int(step.hold_psi) : step.stage === "shut-down" ? "constant" : "";
+        return head + `<tr><td>${esc(step.stage)}</td><td>${esc(step.gauge)}</td><td class="num">${psi}</td>` +
+          `<td class="num">${step.strokes === null ? "" : int(step.strokes)}</td>${actualCell("step" + i)}` +
+          `<td class="note">${esc(step.note)}</td></tr>`;
+      }));
+    if (s.schedule) {
+      html += `<h3>Drill pipe step-down schedule (${esc(s.step_method)})</h3>` +
+              `<p class="note">Pressure follows where the kill mud is. Hold the "psi + SF" column.</p>`;
+      html += table([["Strokes", "num"], ["Kill mud MD ft", "num"], ["TVD ft", "num"], ["psi", "num"],
+                     ["psi + SF", "num"], ["Actual"], [""]],
+        s.schedule.map((r, i) => `<tr><td class="num">${int(r.strokes)}</td><td class="num">${int(r.md_ft)}</td>` +
+          `<td class="num">${int(r.tvd_ft)}</td><td class="num">${int(r.pressure_psi)}</td>` +
+          `<td class="num"><b>${int(r.pressure_plus_sf_psi)}</b></td>${actualCell("schedule" + i)}` +
+          `<td class="note">${r.label === "step" ? "" : esc(r.label)}</td></tr>`));
+    }
+    return html;
+  }
+
+  function drawVolumetric(s) {
+    let html = `<h2>${esc(s.title)}</h2>` + summary([
+      ["Mud gradient", `${dec(s.mud_gradient_psi_per_ft, 4)}`, `psi/ft (${dec(s.mud_weight_ppg, 1)} ppg)`],
+      ["Kill mud gradient", `${dec(s.kill_mud_gradient_psi_per_ft, 4)}`, `psi/ft (${dec(s.kill_mud_weight_ppg, 1)} ppg)`],
+      ["MAASP", int(s.maasp_psi), "psi"],
+      ["Safety margin (team's choice)", int(s.safety_margin_psi), "psi"],
+      ["Working pressure (team's choice)", int(s.working_pressure_psi), "psi"],
+    ]);
+    html += `<h3>Annulus, bottom up</h3>`;
+    if (s.vertical) {
+      html += table([["Section"], ["Capacity bbl/ft", "num"], ["Length ft", "num"]],
+        s.sections.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${dec(r.capacity_bbl_per_ft, 4)}</td>` +
+                            `<td class="num">${int(r.length_ft)}</td></tr>`));
+    } else {
+      html += table([["Section"], ["Capacity bbl/ft", "num"], ["MD ft", "num"], ["TVD ft", "num"], ["TVD/MD", "num"],
+                     ["Bleed bbl (angle corrected)", "num"]],
+        s.sections.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${dec(r.capacity_bbl_per_ft, 4)}</td>` +
+          `<td class="num">${int(r.length_ft)}</td><td class="num">${int(r.tvd_ft)}</td>` +
+          `<td class="num">${dec(r.tvd_over_md, 3)}</td><td class="num">` +
+          `${r.angle_corrected_bleed_bbl === null ? "n/a - horizontal" : dec(r.angle_corrected_bleed_bbl, 1)}</td></tr>`));
+      html += `<p class="note">Angle-corrected volumes are for information only - the volume bled is the vertical ` +
+              `IADC #35 volume below, which bleeds the least mud.</p>`;
+      if (s.horizontal_note) {
+        html += `<div class="box warn">NOTE: gas in the horizontal section doesn't migrate the way it does ` +
+                `vertically - it can sit in high spots. The volumetric method applies once the gas is in the ` +
+                `build or vertical section.</div>`;
+      }
+    }
+    html += `<h3>Volume to bleed per ${int(s.working_pressure_psi)} psi</h3>` +
+            `<p class="note">(working pressure / mud gradient) x annular capacity</p>`;
+    html += table([["Annular capacity"], ["bbl/ft", "num"], ["Bleed bbl", "num"], [""]],
+      s.capacity_choices.map(c => `<tr><td>${esc(c.choice)}</td><td class="num">${dec(c.capacity_bbl_per_ft, 4)}</td>` +
+        `<td class="num">${dec(c.bleed_bbl, 1)}</td><td>${c.used ? "<b>used</b>" : ""}</td></tr>`));
+    html += `<h3>Volumetric method</h3><p>Wait: let SICP rise from ${int(s.sicp_psi)} to ` +
+            `${int(s.first_hold_psi)} psi (safety margin + working pressure).</p>`;
+    html += table([["Cycle", "num"], ["Hold casing psi", "num"], ["Bleed bbl", "num"], ["Total bbl", "num"],
+                   ["15-min rise psi", "num"], ["Actual"], [""]],
+      s.volumetric.map((r, i) => `<tr><td class="num">${r.cycle}</td><td class="num"><b>${int(r.hold_psi)}</b></td>` +
+        `<td class="num">${dec(r.bleed_bbl, 1)}</td><td class="num">${dec(r.total_bled_bbl, 1)}</td>` +
+        `<td class="num">${int(r.sicp_rise_psi)}</td>${actualCell("vol" + i)}<td>` +
+        `${r.above_maasp ? '<span class="flag">above MAASP - continue</span> ' : ""}` +
+        `${r.gas_at_surface ? "<b>GAS AT SURFACE</b>" : ""}</td></tr>`));
+    const cap = dec(s.surface_capacity_bbl_per_ft, 4);
+    html += `<h3>Lubricate and bleed - kill mud, annulus at surface ${cap} bbl/ft</h3>` +
+            `<p class="note">hydrostatic added = bbl pumped x ${dec(s.kill_mud_gradient_psi_per_ft, 4)} / ${cap}</p>`;
+    html += table([["Cycle", "num"], ["Pump to psi", "num"], ["bbl pumped", "num"], ["Hydrostatic psi", "num"],
+                   ["Bleed to psi", "num"], ["Actual"], [""]],
+      s.lubricate_and_bleed.map((r, i) => `<tr><td class="num">${r.cycle}</td><td class="num">${int(r.pump_to_psi)}</td>` +
+        `<td class="num">${dec(r.bbl_pumped, 1)}</td><td class="num">${int(r.hydrostatic_added_psi)}</td>` +
+        `<td class="num"><b>${int(r.bleed_to_psi)}</b></td>${actualCell("lube" + i)}<td>` +
+        `${r.past_kop ? '<span class="flag">kill mud below KOP - less psi per bbl</span> ' : ""}` +
+        `${r.bleed_to_psi === 0 ? "hydrostatic control regained" : ""}</td></tr>`));
+    if (s.kop_md_ft !== null) {
+      html += `<p>Kill mud column ${int(s.kill_mud_column_ft)} ft vs KOP ${int(s.kop_md_ft)} ft - ` +
+              `${s.passed_kop ? '<span class="flag">PASSED KOP</span>' : "stays above KOP"}</p>`;
+    }
+    return html;
+  }
+
+  function calculate() {
+    const results = document.getElementById("results");
+    const problem = checkInputs();
+    if (problem) {
+      results.innerHTML = `<div class="box error">${esc(problem)}</div>`;
+      return;
+    }
+    const answer = JSON.parse(pyodide.globals.get("calculate")(well.kind, JSON.stringify(inputs)));
+    if (answer.error) {
+      results.innerHTML = `<div class="box error">The calculator refused these inputs: ${esc(answer.error)}</div>`;
+      return;
+    }
+    results.innerHTML = answer.kind === "volumetric" ? drawVolumetric(answer.sheet) : drawKillSheet(answer.sheet);
+  }
+
+  // ---------- Wiring ----------
+
+  function chooseWell(id) {
+    well = wells.find(w => w.id === id);
+    inputs = clone(well.inputs);
+    actuals = {};
+    drawInputs();
+    calculate();
+  }
+
+  function setUp() {
+    const select = document.getElementById("well");
+    const groups = {};
+    for (const w of wells) {
+      const group = w.label.split(" - ")[0];
+      (groups[group] ??= []).push(`<option value="${w.id}">${esc(w.label.split(" - ").slice(1).join(" - "))}</option>`);
+    }
+    select.innerHTML = Object.entries(groups).map(([group, options]) =>
+      `<optgroup label="${esc(group)}">${options.join("")}</optgroup>`).join("");
+    select.addEventListener("change", () => chooseWell(select.value));
+    document.getElementById("reset").addEventListener("click", () => chooseWell(select.value));
+
+    const panel = document.getElementById("inputs");
+    panel.addEventListener("input", event => {
+      if (!event.target.dataset.name) return;
+      readField(event.target);
+      clearTimeout(timer);
+      timer = setTimeout(calculate, 300);
+    });
+    panel.addEventListener("change", event => {
+      if (event.target.dataset.name === "method") drawInputs();   // show / hide the W&W inputs
+    });
+    panel.addEventListener("click", event => {
+      const {add, remove, row, cols} = event.target.dataset;
+      if (add) inputs[add] = [...(inputs[add] ?? []), Array.from({length: Number(cols)}, (_, j) => j ? 0 : "")];
+      else if (remove) inputs[remove].splice(Number(row), 1);
+      else return;
+      drawInputs();
+      calculate();
+    });
+    document.getElementById("results").addEventListener("input", event => {
+      if (event.target.dataset.actual) actuals[event.target.dataset.actual] = event.target.value;
+    });
+    chooseWell(wells[0].id);
   }
 
   async function main() {
     const status = document.getElementById("status");
     try {
-      const pyodide = await loadPyodide();
+      pyodide = await loadPyodide();
       const zip = await (await fetch("killsheet.zip")).arrayBuffer();
-      pyodide.unpackArchive(zip, "zip");                  // the killsheet package
-      const app = await (await fetch("app.py")).text();
-      pyodide.runPython(app);
-      drawSheet(JSON.parse(pyodide.runPython("baseline_drillers_sheet()")));
+      pyodide.unpackArchive(zip, "zip");          // the killsheet package and the example wells
+      pyodide.runPython(await (await fetch("app.py")).text());
+      ({wells, forms} = JSON.parse(pyodide.runPython("example_wells()")));
+      setUp();
+      document.getElementById("app").hidden = false;
       status.remove();
     } catch (error) {
-      status.className = "error";
+      status.className = "box error";
       status.textContent = "The calculator failed to load: " + error;
     }
   }

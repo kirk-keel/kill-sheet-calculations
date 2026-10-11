@@ -1,66 +1,123 @@
-"""Runs in the browser (Pyodide). Calculates the kill sheet with the real
-killsheet package and hands the numbers to the page as JSON - the page only
-draws them.
+"""Runs in the browser (Pyodide). Hands the web page the example wells and
+works out the kill sheet with the real killsheet package - the page only
+draws what comes back.
 
-W1 (plumbing): the baseline well, Driller's method. The well data moves to a
-tested module with the other example wells in W2.
+The well data is read straight from the example files (examples/*_well.py),
+so the web page and the printed examples always start from the same wells.
 """
 
+import importlib
 import json
 
-from killsheet.drillers import drillers_method
-from killsheet.formulas import (
-    final_circulating_pressure,
-    initial_circulating_pressure,
-    kill_mud_overbalance,
-    kill_mud_weight,
-    maasp,
-    max_allowable_mud_weight,
-)
-from killsheet.strokes import bit_to_shoe_strokes, bit_to_surface_strokes, surface_to_bit_strokes
+from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, kill_sheet, volumetric_sheet
+from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS
+from killsheet.volumetric import AVERAGE, LONGEST, SMALLEST
 
-# Baseline example well - same data as examples/example_well.py
-BIT_TVD_FT = 11_500
-SHOE_TVD_FT = 5_150
-ORIGINAL_MUD_WEIGHT_PPG = 10.4
-LOT_PRESSURE_PSI = 1_350
-TEST_MUD_WEIGHT_PPG = 9.6
-SIDPP_PSI = 650
-SICP_PSI = 800
-SCR_PRESSURE_PSI = 750
-SAFETY_MARGIN_PSI = 50
-PUMP_OUTPUT_BBL_PER_STK = 0.117
-DRILL_STRING = [(0.0178, 10_000), (0.0087, 900), (0.0077, 600)]          # top down
-OPEN_HOLE_ANNULUS = [(0.0291, 600), (0.0459, 900), (0.0459, 4_850)]      # bit up
-CASED_HOLE_ANNULUS = [(0.0489, 5_150)]                                   # bit up
+KILL_SHEET = "kill sheet"
+VOLUMETRIC = "volumetric"
+
+# The example wells offered in the dropdown: (example file, label).
+# Bullheading and reverse circulation come in a later web release.
+EXAMPLE_WELLS = [
+    ("example_well", "Driller's - vertical, untapered (baseline)"),
+    ("tapered_well", "Driller's - vertical, tapered"),
+    ("deviated_well", "Driller's - deviated, untapered"),
+    ("deviated_tapered_well", "Driller's - deviated, tapered"),
+    ("horizontal_well", "Driller's - horizontal, untapered"),
+    ("horizontal_tapered_well", "Driller's - horizontal, tapered"),
+    ("wait_and_weight_well", "Wait and Weight - vertical, untapered"),
+    ("wait_and_weight_tapered_well", "Wait and Weight - vertical, tapered"),
+    ("wait_and_weight_deviated_well", "Wait and Weight - deviated, untapered"),
+    ("wait_and_weight_deviated_tapered_well", "Wait and Weight - deviated, tapered"),
+    ("wait_and_weight_horizontal_well", "Wait and Weight - horizontal, untapered"),
+    ("wait_and_weight_horizontal_tapered_well", "Wait and Weight - horizontal, tapered"),
+    ("volumetric_pipe_on_bottom_well", "Volumetric + L&B - pipe on bottom, vertical, untapered"),
+    ("volumetric_pipe_above_influx_well", "Volumetric + L&B - pipe above the influx, vertical, untapered"),
+    ("volumetric_pipe_out_of_hole_well", "Volumetric + L&B - pipe out of the hole, vertical"),
+    ("volumetric_tapered_pipe_on_bottom_well", "Volumetric + L&B - pipe on bottom, vertical, tapered"),
+    ("volumetric_tapered_pipe_above_influx_well", "Volumetric + L&B - pipe above the influx, vertical, tapered"),
+    ("volumetric_tapered_pipe_out_of_hole_well", "Volumetric + L&B - pipe out of the hole, vertical, tapered"),
+    ("volumetric_deviated_well", "Volumetric + L&B - deviated, pipe on bottom, untapered"),
+    ("volumetric_deviated_tapered_well", "Volumetric + L&B - deviated, pipe on bottom, tapered"),
+    ("volumetric_horizontal_well", "Volumetric + L&B - horizontal, pipe on bottom, untapered"),
+    ("volumetric_horizontal_tapered_well", "Volumetric + L&B - horizontal, pipe on bottom, tapered"),
+]
+
+# The input form for each kind of sheet: (input name, label, type, optional).
+# Types: text, number (with its unit), a list of choices, sections
+# (name, capacity, length), points (name, MD, TVD) or numbers (a list of readings).
+# Optional inputs may be left blank: a blank MD means a vertical well (MD = TVD).
+WW = "Wait and Weight only"
+FORMS = {
+    KILL_SHEET: [
+        ("title", "Title", "text", False),
+        ("method", "Method", [DRILLERS, WAIT_AND_WEIGHT], False),
+        ("step_method", "Step-down schedule", [TEN_STEPS, EVERY_100_STROKES], WW),
+        ("bit_tvd_ft", "Bit TVD", "ft", False),
+        ("bit_md_ft", "Bit MD (blank = vertical)", "ft", True),
+        ("shoe_tvd_ft", "Shoe TVD", "ft", False),
+        ("shoe_md_ft", "Shoe MD (blank = vertical)", "ft", True),
+        ("original_mud_weight_ppg", "Original mud weight", "ppg", False),
+        ("lot_pressure_psi", "Leak-off test pressure", "psi", False),
+        ("test_mud_weight_ppg", "Leak-off test mud weight", "ppg", False),
+        ("sidpp_psi", "SIDPP", "psi", False),
+        ("sicp_psi", "SICP", "psi", False),
+        ("scr_pressure_psi", "SCR pressure", "psi", False),
+        ("safety_margin_psi", "Safety margin (SF), team's choice", "psi", False),
+        ("pump_output_bbl_per_stk", "Pump output", "bbl/stk", False),
+        ("surface_line_volume_bbl", "Surface line volume (0 if unknown)", "bbl", False),
+        ("sidpp_at_start_psi", "SIDPP retaken before start-up", "psi", WW),
+        ("sicp_at_start_psi", "SICP retaken before start-up", "psi", WW),
+        ("observed_icp_psi", "Drill pipe reading at kill rate (blank until you have it)", "psi", WW),
+        ("key_points", "Key points (KOP, end of build, heel)", "points", True),
+        ("drill_string", "Drill string, top down", "sections", False),
+        ("open_hole_annulus", "Open hole annulus, bit up", "sections", False),
+        ("cased_hole_annulus", "Cased hole annulus, bit up", "sections", False),
+    ],
+    VOLUMETRIC: [
+        ("title", "Title", "text", False),
+        ("original_mud_weight_ppg", "Mud weight", "ppg", False),
+        ("kill_mud_weight_ppg", "Kill mud weight (lubricate and bleed)", "ppg", False),
+        ("td_md_ft", "TD MD (blank = vertical)", "ft", True),
+        ("td_tvd_ft", "TD TVD (blank = vertical)", "ft", True),
+        ("shoe_tvd_ft", "Shoe TVD", "ft", False),
+        ("shoe_md_ft", "Shoe MD (blank = vertical)", "ft", True),
+        ("lot_pressure_psi", "Leak-off test pressure", "psi", False),
+        ("test_mud_weight_ppg", "Leak-off test mud weight", "ppg", False),
+        ("sicp_psi", "SICP", "psi", False),
+        ("safety_margin_psi", "Safety margin, team's choice", "psi", False),
+        ("working_pressure_psi", "Working pressure, team's choice", "psi", False),
+        ("capacity_choice", "Annular capacity used", [SMALLEST, AVERAGE, LONGEST], False),
+        ("key_points", "Key points (KOP, end of build, heel)", "points", True),
+        ("annulus_bottom_up", "Annulus, bottom up (include sections with no pipe)", "sections", False),
+        ("sicp_rises_after_each_cycle", "Readings: SICP rise over the 15-minute wait, each cycle", "numbers", False),
+        ("sicp_gas_at_surface_psi", "Reading: SICP with gas at surface", "psi", False),
+        ("bbl_pumped_each_cycle", "Readings: bbl pumped, each lubricate and bleed cycle", "numbers", False),
+    ],
+}
 
 
-def baseline_drillers_sheet():
-    """The baseline well's kill sheet, Driller's method, as JSON for the page."""
-    kmw = kill_mud_weight(SIDPP_PSI, BIT_TVD_FT, ORIGINAL_MUD_WEIGHT_PPG)
-    icp = initial_circulating_pressure(SIDPP_PSI, SCR_PRESSURE_PSI)
-    fcp = final_circulating_pressure(SCR_PRESSURE_PSI, kmw, ORIGINAL_MUD_WEIGHT_PPG)
-    mamw = max_allowable_mud_weight(LOT_PRESSURE_PSI, SHOE_TVD_FT, TEST_MUD_WEIGHT_PPG)
-    pump = PUMP_OUTPUT_BBL_PER_STK
-    stb = surface_to_bit_strokes(DRILL_STRING, pump)
-    bts = bit_to_shoe_strokes(OPEN_HOLE_ANNULUS, pump)
-    btsurf = bit_to_surface_strokes(OPEN_HOLE_ANNULUS + CASED_HOLE_ANNULUS, pump)
-    overbalance = kill_mud_overbalance(kmw, ORIGINAL_MUD_WEIGHT_PPG, BIT_TVD_FT)
-    steps = drillers_method(SIDPP_PSI, SICP_PSI, icp, fcp, stb, btsurf, SAFETY_MARGIN_PSI, overbalance)
-    return json.dumps({
-        "title": "Baseline well - vertical, untapered string, surface BOP stack",
-        "method": "Driller's method",
-        "summary": [
-            ["Kill mud weight", f"{kmw:.1f}", "ppg"],
-            ["Initial circulating pressure", f"{icp:,}", "psi"],
-            ["Final circulating pressure", f"{fcp:,}", "psi"],
-            ["Max allowable mud weight", f"{mamw:.1f}", "ppg"],
-            ["MAASP (original mud)", f"{maasp(mamw, ORIGINAL_MUD_WEIGHT_PPG, SHOE_TVD_FT):,}", "psi"],
-            ["MAASP (after kill)", f"{maasp(mamw, kmw, SHOE_TVD_FT):,}", "psi"],
-            ["Surface to bit", f"{stb:,}", "stks"],
-            ["Bit to shoe", f"{bts:,}", "stks"],
-            ["Bit to surface", f"{btsurf:,}", "stks"],
-            ["Safety margin (SF)", f"{SAFETY_MARGIN_PSI:,}", "psi"],
-        ],
-        "steps": [step._asdict() for step in steps],
-    })
+def well_inputs(example):
+    """The WELL data of one example file, with the kind of sheet it is."""
+    well = importlib.import_module(example).WELL
+    kind = VOLUMETRIC if "annulus_bottom_up" in well else KILL_SHEET
+    return kind, well
+
+
+def example_wells():
+    """Every example well for the dropdown, with its inputs, as JSON."""
+    wells = []
+    for example, label in EXAMPLE_WELLS:
+        kind, well = well_inputs(example)
+        wells.append({"id": example, "label": label, "kind": kind, "inputs": well})
+    return json.dumps({"wells": wells, "forms": FORMS})
+
+
+def calculate(kind, inputs_json):
+    """Work out the sheet from the page's inputs. Returns JSON: the sheet, or the error."""
+    inputs = json.loads(inputs_json)
+    try:
+        sheet = volumetric_sheet(**inputs) if kind == VOLUMETRIC else kill_sheet(**inputs)
+    except (ValueError, TypeError, KeyError, ZeroDivisionError, IndexError) as error:
+        return json.dumps({"error": str(error)})
+    return json.dumps({"kind": kind, "sheet": sheet})

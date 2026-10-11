@@ -11,7 +11,7 @@ Run it with:  python examples/wait_and_weight_deviated_well.py
 from kill_sheet_printer import WAIT_AND_WEIGHT, print_kill_sheet
 from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS  # noqa: F401
 
-print_kill_sheet(
+WELL = dict(
     title="KILL SHEET - deviated well, untapered string, surface BOP stack",
     method=WAIT_AND_WEIGHT,
     step_method=TEN_STEPS,              # default; or EVERY_100_STROKES
@@ -56,3 +56,6 @@ print_kill_sheet(
         ('DP x 9-5/8" casing', 0.0489, 5_380),
     ],
 )
+
+if __name__ == "__main__":
+    print_kill_sheet(**WELL)

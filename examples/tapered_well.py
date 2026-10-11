@@ -8,7 +8,7 @@ Run it with:  python examples/tapered_well.py
 
 from kill_sheet_printer import DRILLERS, WAIT_AND_WEIGHT, print_kill_sheet  # noqa: F401
 
-print_kill_sheet(
+WELL = dict(
     title="KILL SHEET - vertical well, tapered string, surface BOP stack",
     method=DRILLERS,
     # Well data
@@ -42,3 +42,6 @@ print_kill_sheet(
         ('5" DP x 7" casing', 0.0140, 7_000),
     ],
 )
+
+if __name__ == "__main__":
+    print_kill_sheet(**WELL)

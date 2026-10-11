@@ -8,7 +8,7 @@ Run it with:  python examples/volumetric_pipe_out_of_hole_well.py
 from kill_sheet_printer import print_volumetric_sheet
 from killsheet.volumetric import AVERAGE, LONGEST, SMALLEST  # noqa: F401
 
-print_volumetric_sheet(
+WELL = dict(
     title="VOLUMETRIC - pipe out of the hole (vertical)",
     original_mud_weight_ppg=10.4,
     kill_mud_weight_ppg=11.5,
@@ -31,3 +31,6 @@ print_volumetric_sheet(
     sicp_gas_at_surface_psi=1_158,
     bbl_pumped_each_cycle=[15.0, 16.0, 17.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0],
 )
+
+if __name__ == "__main__":
+    print_volumetric_sheet(**WELL)
