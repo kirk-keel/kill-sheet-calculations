@@ -36,15 +36,16 @@ trapped pressure, bleeds it off and flow checks. The calculator also runs in you
 
 ### **[Open the web page](https://kirk-keel.github.io/kill-sheet-calculations/)**
 
-- Pick one of 30 example wells (Driller's, Wait and Weight, volumetric and lubricate and
-  bleed, bullheading - vertical, deviated and horizontal, untapered and tapered) and change
-  any input.
+- Pick one of 36 example wells (Driller's, Wait and Weight, volumetric and lubricate and
+  bleed, bullheading, reverse circulation - vertical, deviated and horizontal, untapered and
+  tapered) and change any input.
   The sheet recalculates as you type.
 - Page 1: well schematic, kill mud weight, ICP, FCP, MAMW, MAASP, volumes in bbl and strokes.
 - Page 2: the kill plot (forecast drill pipe and casing pressure, vertical wells) and the
   kill steps and schedules, with an **Actual** column to record the gauge readings.
   Bullheading: the chart of string and annulus max pressures, with **Actual string** and
-  **Actual annulus** columns.
+  **Actual annulus** columns. Reverse circulation: the completion schematic, SITP / SICP to
+  expect, the annulus limits, the kill steps and the annulus pump pressure schedule.
 - **Print kill sheet** prints it on paper. A link like
   `.../kill-sheet-calculations/#wait_and_weight_well` opens a chosen well.
 - Nothing is sent anywhere: the page runs this project's own tested Python code

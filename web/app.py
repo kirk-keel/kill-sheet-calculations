@@ -9,7 +9,14 @@ so the web page and the printed examples always start from the same wells.
 import importlib
 import json
 
-from killsheet.kill_sheet import DRILLERS, WAIT_AND_WEIGHT, bullhead_sheet, kill_sheet, volumetric_sheet
+from killsheet.kill_sheet import (
+    DRILLERS,
+    WAIT_AND_WEIGHT,
+    bullhead_sheet,
+    kill_sheet,
+    reverse_circulation_sheet,
+    volumetric_sheet,
+)
 from killsheet.schedule import EVERY_100_STROKES, TEN_STEPS
 from killsheet.volumetric import AVERAGE, LONGEST, SMALLEST
 from killsheet.volumetric_model import ANNULUS_AT_THE_GAS
@@ -17,9 +24,9 @@ from killsheet.volumetric_model import ANNULUS_AT_THE_GAS
 KILL_SHEET = "kill sheet"
 VOLUMETRIC = "volumetric"
 BULLHEAD = "bullhead"
+REVERSE = "reverse circulation"
 
 # The example wells offered in the dropdown: (example file, label).
-# Reverse circulation comes in a later web release.
 EXAMPLE_WELLS = [
     ("example_well", "Driller's - vertical, untapered (baseline)"),
     ("tapered_well", "Driller's - vertical, tapered"),
@@ -51,6 +58,12 @@ EXAMPLE_WELLS = [
     ("bullhead_deviated_tapered_well", "Bullheading - deviated, tapered"),
     ("bullhead_horizontal_well", "Bullheading - horizontal, untapered"),
     ("bullhead_horizontal_tapered_well", "Bullheading - horizontal, tapered"),
+    ("reverse_circulation_well", "Reverse circulation (CWI) - vertical"),
+    ("reverse_circulation_tapered_well", "Reverse circulation (CWI) - vertical, tapered tubing"),
+    ("reverse_circulation_deviated_well", "Reverse circulation (CWI) - deviated"),
+    ("reverse_circulation_deviated_tapered_well", "Reverse circulation (CWI) - deviated, tapered tubing"),
+    ("reverse_circulation_horizontal_well", "Reverse circulation (CWI) - horizontal, perfs in the lateral"),
+    ("reverse_circulation_horizontal_tapered_well", "Reverse circulation (CWI) - horizontal, tapered tubing"),
 ]
 
 # The input form for each kind of sheet: (input name, label, type, optional).
@@ -129,13 +142,39 @@ FORMS = {
         ("drill_string", "Drill string, top down", "sections", False),
         ("annulus_bottom_up", "Annulus, bit up", "sections", False),
     ],
+    REVERSE: [
+        ("title", "Title", "text", False),
+        ("circulating_point", "Circulating point", ["SSD", "tubing punch"], False),
+        ("formation_pressure_psi", "Formation pressure", "psi", False),
+        ("sitp_psi", "SITP (before the circulating point is opened)", "psi", False),
+        ("top_perf_tvd_ft", "Top perf TVD (heel TVD for perfs in the lateral)", "ft", False),
+        ("top_perf_md_ft", "Top perf MD (blank = vertical)", "ft", True),
+        ("bottom_perf_tvd_ft", "Bottom perf TVD", "ft", False),
+        ("ssd_tvd_ft", "Circulating point TVD", "ft", False),
+        ("ssd_md_ft", "Circulating point MD (blank = vertical)", "ft", True),
+        ("packer_tvd_ft", "Packer TVD", "ft", False),
+        ("packer_md_ft", "Packer MD (blank = vertical)", "ft", True),
+        ("packer_fluid_ppg", "Packer fluid", "ppg", False),
+        ("fracture_gradient_psi_per_ft", "Fracture gradient at the top perf", "psi/ft", False),
+        ("margin_ppg", "Kill fluid margin, optional (0 if none)", "ppg", True),
+        ("pump_output_bbl_per_stk", "Pump output", "bbl/stk", False),
+        ("pump_rate_bbl_per_min", "Kill rate", "bbl/min", False),
+        ("observed_icp_psi", "Annulus pressure at kill rate - observed ICP (blank until you have it)", "psi", True),
+        ("casing_capacity_bbl_per_ft", "Casing capacity, packer to perfs", "bbl/ft", False),
+        ("equipment_ratings", "Equipment ratings / tested values (the lowest is the limit)", "ratings", False),
+        ("key_points", "Key points (KOP, end of build, heel)", "points", True),
+        ("annulus_sections", "Annulus, surface to the circulating point", "sections", False),
+        ("tubing_sections", "Tubing, surface to the circulating point", "sections", False),
+    ],
 }
 
 
 def well_inputs(example):
     """The WELL data of one example file, with the kind of sheet it is."""
     well = importlib.import_module(example).WELL
-    if "sicp_increase_psi_per_hr" in well:
+    if "tubing_sections" in well:
+        kind = REVERSE
+    elif "sicp_increase_psi_per_hr" in well:
         kind = BULLHEAD
     else:
         kind = VOLUMETRIC if "annulus_bottom_up" in well else KILL_SHEET
@@ -154,7 +193,8 @@ def example_wells():
 def calculate(kind, inputs_json):
     """Work out the sheet from the page's inputs. Returns JSON: the sheet, or the error."""
     inputs = json.loads(inputs_json)
-    sheets = {KILL_SHEET: kill_sheet, VOLUMETRIC: volumetric_sheet, BULLHEAD: bullhead_sheet}
+    sheets = {KILL_SHEET: kill_sheet, VOLUMETRIC: volumetric_sheet, BULLHEAD: bullhead_sheet,
+              REVERSE: reverse_circulation_sheet}
     try:
         sheet = sheets[kind](**inputs)
     except (ValueError, TypeError, KeyError, ZeroDivisionError, IndexError) as error:

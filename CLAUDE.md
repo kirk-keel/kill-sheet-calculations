@@ -32,7 +32,7 @@ baseline must keep working and keep its tests.
   - `volumetric_model.py` — volumetric forecast: single bubble, bleed at the gas, hold correction,
     shoe tiers, Pf, wording (checked against tests/reference_model.py reference_volumetric)
   - `volumetric_plot.py` — volumetric and lubricate and bleed charts (pressure vs bbl), pipe position
-  - `kill_sheet.py` — the whole Driller's / W&W / volumetric / bullhead sheet as plain dicts (calls the
+  - `kill_sheet.py` — every sheet (Driller's / W&W / volumetric / bullhead / reverse) as plain dicts (calls the
     modules above, calculates nothing new); the printer AND the web page draw from it
 - **Oilfield units only:** ppg, psi, ft, bbl, bbl/ft, spm, bbl/stk.
 - Pressure gradient constant: `0.052` psi/ft per ppg.
@@ -516,8 +516,8 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 829/0, SF < OB clamp, high-ICP W&W 61).
 DONE: the web page (v1.1.0), the deviated/horizontal kill plot (v1.2.0), and the volumetric plot
 + volumetric schematic (v1.3, see "Volumetric / L&B plot").
-NEXT: the user's list is done - ask (roadmap: bullhead and reverse circulation on the web page,
-then the subsea stack).
+DONE: bullhead and reverse circulation on the web page (v1.4, tables only - user: no bullhead plot).
+NEXT: the subsea stack - ask before starting.
 
 Web page sub-phases (user-approved; stop after each). DONE: W1-W5, released v1.1.0. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
@@ -549,7 +549,8 @@ slowest sheet (horizontal W&W, ~22,000 forecast strokes incl. the Driller's comp
   (workflow_run), builds `web/` with `web/build_site.py` into `_site/` (index.html, app.py,
   killsheet.zip of src/killsheet) and publishes it to GitHub Pages.
 - Release tags: v0.1, v0.1.1, v0.2 ... v0.19, v1.0.0 (surface stack complete), v1.1.0 (SF +
-  web page). Minor
+  web page), v1.2.0 (deviated/horizontal kill plot), v1.3.0 (volumetric forecast), v1.4.0
+  (bullhead and reverse circulation on the web page). Minor
   number for each new capability, patch number for fixes.
 
 ## Commands
@@ -570,7 +571,7 @@ python -m http.server --directory _site   # try it at http://localhost:8000
 Examples: `examples/kill_sheet_printer.py` holds the shared printing code; each
 example file is just the well data: `WELL = dict(...)`, printed under
 `if __name__ == "__main__":`. The web page reads the same WELL data (web/app.py
-EXAMPLE_WELLS lists the 30 Driller's / W&W / volumetric / bullhead wells in the dropdown; FORMS
+EXAMPLE_WELLS lists all 36 example wells in the dropdown; FORMS
 lists every input). After any printer/sheet change, every example's output must be
 byte-identical unless the user approved the change. Sections in the examples are
 `(name, capacity, length)`; the name is for printing only.

@@ -479,6 +479,69 @@
     return html;
   }
 
+  function drawReverse(s) {
+    const pt = s.circulating_point;
+    const lim = s.equipment_limit_psi;
+    let html = `<h2>${esc(s.title)}</h2><div class="page1"><div>${drawSchematic(s.schematic)}</div><div>` +
+      summary([
+        ["Tubing fluid gradient", dec(s.tubing_gradient_psi_per_ft, 4),
+         `psi/ft ((${int(s.formation_pressure_psi)} - ${int(s.sitp_entered_psi)}) / ${int(s.mid_perf_tvd_ft)} mid-perf TVD)`],
+        [`Pressure at the ${pt}`, int(s.pressure_at_ssd_psi), "psi (formation fluid left below it)"],
+        ["Kill weight fluid", dec(s.kill_fluid_ppg, 1), `ppg (balances at the ${esc(pt)}; rounded UP, margin ${s.margin_ppg} ppg)`],
+        ["Fracture at the top perf", int(s.fracture_psi),
+         `psi (${s.fracture_gradient_psi_per_ft} x ${int(s.top_perf_tvd_ft)})`],
+        ["Kill rate", dec(s.pump_rate_bbl_per_min, 1), `bbl/min = ${s.spm} spm`],
+      ]) +
+      `<h3>Before start-up</h3><p class="note">Open the ${esc(pt)}, let pressures stabilise, record:</p>` +
+      table([["Gauge"], ["Expected psi", "num"], ["Actual"], [""]], [
+        `<tr><td>SITP</td><td class="num">${int(s.sitp_psi)}</td>${actualCell("sitp")}<td></td></tr>`,
+        `<tr><td>SICP</td><td class="num">${int(s.sicp_psi)}</td>${actualCell("sicp")}` +
+          `<td class="note">= pressure at the ${esc(pt)} - annulus hydrostatic</td></tr>`,
+      ]) +
+      `<h3>Max allowable annulus pressure</h3>` +
+      table([["Annulus holds"], ["Formation", "num"], ["Equipment", "num"], ["Used", "num"]], [
+        ["packer fluid", s.max_packer_fluid_psi], ["kill fluid", s.max_kill_fluid_psi]].map(([name, f]) =>
+        `<tr><td>${name}</td><td class="num">${int(f)}</td><td class="num">${int(lim)}</td>` +
+        `<td class="num"><b>${int(Math.min(f, lim))}</b></td></tr>`)) +
+      `<p class="note">Equipment limit: ${esc(s.equipment_limit_name)} (lowest rating / test).</p>` +
+      `<h3>Volumes</h3>` +
+      table([["Volume"], ["bbl", "num"], ["Strokes", "num"]], [
+        `<tr><td>Annulus, surface to ${esc(pt)}</td><td class="num">${dec(s.annulus_volume_bbl, 1)}</td>` +
+          `<td class="num">${int(s.annulus_strokes)}</td></tr>`,
+        `<tr><td>Tubing, ${esc(pt)} to surface</td><td class="num">${dec(s.tubing_volume_bbl, 1)}</td>` +
+          `<td class="num">${int(s.tubing_strokes)}</td></tr>`,
+      ]) + `</div></div>`;
+    html += inputsTable();
+    html += `<div class="page-break"></div>`;               // printed page 2: the kill
+    if (s.observed_icp_psi === null) {
+      return html + `<div class="box warn">Observed ICP: not yet read - bring the pump up holding tubing at the SITP, ` +
+                    `then enter the annulus pressure at kill rate to build the schedule.</div>`;
+    }
+    html += summary([
+      ["Observed ICP", int(s.observed_icp_psi), "psi (annulus pressure at kill rate)"],
+      ["FCP", int(s.fcp_psi), `psi (ICP - (${dec(s.kill_fluid_ppg, 1)} - ${dec(s.packer_fluid_ppg, 1)}) x 0.052 x ` +
+                              `${int(s.ssd_tvd_ft)}, drop rounded DOWN)`],
+    ]);
+    if (s.fcp_floor_warning) html += `<div class="box warn">${esc(s.fcp_floor_warning)}</div>`;
+    html += `<h3>Reverse circulation - sides are swapped: pump on the ANNULUS, choke on the TUBING</h3>`;
+    html += table([["Stage"], ["Gauge"], ["psi", "num"], ["Strokes", "num"], ["Actual"], ["Note"]],
+      s.steps.map((step, i) => `<tr><td>${esc(step.stage)}</td><td>${esc(step.gauge)}</td>` +
+        `<td class="num">${step.hold_psi === null ? (step.stage === "shut-down" ? "constant" : "") : int(step.hold_psi)}</td>` +
+        `<td class="num">${step.strokes === null ? "" : int(step.strokes)}</td>${actualCell("step" + i)}` +
+        `<td class="note">${esc(step.note)}</td></tr>`));
+    html += `<div class="keep"><h3>Annulus pump pressure schedule</h3>` +
+      table([["Strokes", "num"], ["Kill fluid MD ft", "num"], ["TVD ft", "num"], ["Pump psi", "num"],
+             ["Max allowable psi", "num"], ["Actual"], [""]],
+        s.schedule.map((r, i) => `<tr><td class="num">${int(r.strokes)}</td><td class="num">${int(r.kill_fluid_md_ft)}</td>` +
+          `<td class="num">${int(r.kill_fluid_tvd_ft)}</td><td class="num"><b>${int(r.pump_psi)}</b></td>` +
+          `<td class="num">${int(r.max_allowable_psi)}</td>${actualCell("schedule" + i)}` +
+          `<td class="note">${r.label === "step" ? "" : esc(r.label)}</td></tr>`)) + `</div>`;
+    html += `<p>Optional: bullhead the ${dec(s.volume_below_ssd_bbl, 1)} bbl below the ${esc(pt)} (tubing to the packer + ` +
+            `casing to the top perf) - max tubing pressure ${int(s.bullhead_below_initial_psi)} psi at the start, ` +
+            `${int(s.bullhead_below_final_psi)} psi once displaced to the top perf.</p>`;
+    return html;
+  }
+
   // Spread label positions so they are at least `gap` apart, keeping their order.
   function spread(ys, gap, top, bottom) {
     const out = [];
@@ -495,21 +558,34 @@
     const y = md => T + (H - T - B) * md / sc.bit_md_ft;
     const hole = 30, casing = 24, pipe = 8;
     const both = (md, tvd) => md === tvd ? `${int(md)} ft` : `${int(md)} MD / ${int(tvd)} TVD`;
-    let svg = `<rect class="mud" x="${cx - casing}" y="${y(0)}" width="${2 * casing}" height="${y(sc.shoe_md_ft) - y(0)}"/>` +
-              `<rect class="mud" x="${cx - hole}" y="${y(sc.shoe_md_ft)}" width="${2 * hole}" ` +
-              `height="${y(sc.bit_md_ft) - y(sc.shoe_md_ft)}"/>`;
+    const cwi = sc.packer_md_ft != null;                // completion: cased to the bottom, tubing to the packer
+    const casingBottom = sc.shoe_md_ft ?? sc.bit_md_ft;
+    let svg = `<rect class="mud" x="${cx - casing}" y="${y(0)}" width="${2 * casing}" height="${y(casingBottom) - y(0)}"/>`;
+    if (!cwi) svg += `<rect class="mud" x="${cx - hole}" y="${y(sc.shoe_md_ft)}" width="${2 * hole}" ` +
+                     `height="${y(sc.bit_md_ft) - y(sc.shoe_md_ft)}"/>`;
     for (const side of [-1, 1]) {
-      svg += `<line class="casing-wall" x1="${cx + side * casing}" x2="${cx + side * casing}" y1="${y(0)}" y2="${y(sc.shoe_md_ft)}"/>` +
-             `<polygon fill="var(--ink)" points="${cx + side * casing},${y(sc.shoe_md_ft) - 9} ` +
-             `${cx + side * (casing + 7)},${y(sc.shoe_md_ft)} ${cx + side * casing},${y(sc.shoe_md_ft)}"/>` +
-             `<line class="hole-wall" x1="${cx + side * hole}" x2="${cx + side * hole}" y1="${y(sc.shoe_md_ft)}" y2="${y(sc.bit_md_ft)}"/>`;
+      svg += `<line class="casing-wall" x1="${cx + side * casing}" x2="${cx + side * casing}" y1="${y(0)}" y2="${y(casingBottom)}"/>`;
+      if (cwi) {
+        svg += `<rect fill="var(--ink)" x="${side < 0 ? cx - casing : cx + pipe}" y="${y(sc.packer_md_ft) - 4}" ` +
+               `width="${casing - pipe}" height="8"><title>Packer</title></rect>`;
+        for (let k = 0; k < 4; k++) {                   // perforations, from the top perf down
+          svg += `<line class="point" x1="${cx + side * casing}" x2="${cx + side * (casing + 10)}" ` +
+                 `y1="${y(sc.bit_md_ft) - 4 - 5 * k}" y2="${y(sc.bit_md_ft) - 4 - 5 * k}"/>`;
+        }
+      } else {
+        svg += `<polygon fill="var(--ink)" points="${cx + side * casing},${y(sc.shoe_md_ft) - 9} ` +
+               `${cx + side * (casing + 7)},${y(sc.shoe_md_ft)} ${cx + side * casing},${y(sc.shoe_md_ft)}"/>` +
+               `<line class="hole-wall" x1="${cx + side * hole}" x2="${cx + side * hole}" y1="${y(sc.shoe_md_ft)}" y2="${y(sc.bit_md_ft)}"/>`;
+      }
     }
     sc.string.forEach((sec, i) => {
       svg += `<rect class="pipe pipe-${i % 2 ? "b" : "a"}" x="${cx - pipe}" y="${y(sec.top_md_ft)}" width="${2 * pipe}" ` +
              `height="${Math.max(1, y(sec.bottom_md_ft) - y(sec.top_md_ft))}"><title>${esc(sec.name)}</title></rect>`;
     });
     const pipeBottom = sc.string.length ? sc.string[sc.string.length - 1].bottom_md_ft : null;
-    if (pipeBottom !== null) {
+    if (cwi) {
+      svg += `<circle cx="${cx}" cy="${y(sc.ssd_md_ft)}" r="5" fill="var(--casing)"><title>${esc(sc.circulating_point)}</title></circle>`;
+    } else if (pipeBottom !== null) {
       const by = y(pipeBottom);
       svg += `<polygon fill="var(--ink)" points="${cx - pipe - 3},${by - 6} ${cx + pipe + 3},${by - 6} ${cx + 4},${by} ${cx - 4},${by}"/>`;
     }
@@ -526,10 +602,12 @@
              `<text class="sub" x="${cx + hole + 22}" y="${ry[i] + 12}">${esc(r.sub)}</text>`;
     });
     // Left: shoe, key points, bit - MD and TVD.
-    const left = [{md: sc.shoe_md_ft, tvd: sc.shoe_tvd_ft, name: "Shoe"},
+    const left = [...(cwi ? [{md: sc.ssd_md_ft, tvd: sc.ssd_tvd_ft, name: sc.circulating_point},
+                             {md: sc.packer_md_ft, tvd: sc.packer_tvd_ft, name: "Packer"}]
+                          : [{md: sc.shoe_md_ft, tvd: sc.shoe_tvd_ft, name: "Shoe"}]),
                   ...sc.key_points.map(k => ({md: k.md_ft, tvd: k.tvd_ft, name: k.name})),
                   {md: sc.bit_md_ft, tvd: sc.bit_tvd_ft, name: sc.bottom_name ?? "Bit"},
-                  ...(pipeBottom !== null && pipeBottom < sc.bit_md_ft
+                  ...(!cwi && pipeBottom !== null && pipeBottom < sc.bit_md_ft
                       ? [{md: pipeBottom, tvd: sc.pipe_bottom_tvd_ft, name: "Bit"}] : [])].sort((a, b) => a.md - b.md)
       .reduce((rows, l) => {                      // points at the same MD share one label
         const last = rows[rows.length - 1];
@@ -538,7 +616,7 @@
       }, []);
     const ly = spread(left.map(l => y(l.md)), 28, T + 6, H - B - 14);
     left.forEach((l, i) => {
-      if (!["Shoe", "Bit", "TD"].includes(l.name.split(" / ")[0])) {
+      if (!["Shoe", "Bit", "TD", "Top perf", "Packer", sc.circulating_point].includes(l.name.split(" / ")[0])) {
         svg += `<line class="point" x1="${cx - hole - 6}" x2="${cx + hole + 6}" y1="${y(l.md)}" y2="${y(l.md)}"/>`;
       }
       svg += `<line class="leader" x1="${cx - hole - 2}" x2="${cx - hole - 18}" y1="${y(l.md)}" y2="${ly[i]}"/>` +
@@ -723,7 +801,8 @@
       results.innerHTML = `<div class="box error">The calculator refused these inputs: ${esc(answer.error)}</div>`;
       return;
     }
-    const draw = {volumetric: drawVolumetric, bullhead: drawBullhead}[answer.kind] ?? drawKillSheet;
+    const draw = {volumetric: drawVolumetric, bullhead: drawBullhead, "reverse circulation": drawReverse}[answer.kind]
+                 ?? drawKillSheet;
     results.innerHTML = draw(answer.sheet);
   }
 

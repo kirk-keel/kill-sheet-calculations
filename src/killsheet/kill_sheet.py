@@ -36,6 +36,7 @@ from killsheet.kill_plot import (
     shoe_margin_warning,
     wait_and_weight_kill_plot,
 )
+from killsheet import reverse_circulation as reverse
 from killsheet.rounding import round_to_tenth, round_to_whole_number
 from killsheet.lubricate_and_bleed import (
     cycles_past_kop,
@@ -713,3 +714,125 @@ def bullhead_sheet(
             "annulus": section_depths(annulus_bottom_up, bit_md, down=False),
         },
     }
+
+
+def reverse_circulation_sheet(
+    title,
+    formation_pressure_psi,
+    sitp_psi,
+    top_perf_tvd_ft,
+    bottom_perf_tvd_ft,
+    ssd_tvd_ft,
+    packer_tvd_ft,
+    packer_fluid_ppg,
+    fracture_gradient_psi_per_ft,
+    pump_output_bbl_per_stk,
+    pump_rate_bbl_per_min,
+    equipment_ratings,
+    annulus_sections,
+    tubing_sections,
+    casing_capacity_bbl_per_ft,
+    observed_icp_psi=None,
+    margin_ppg=0,
+    circulating_point="SSD",
+    ssd_md_ft=None,
+    packer_md_ft=None,
+    top_perf_md_ft=None,
+    key_points=(),
+):
+    """Reverse circulation kill sheet for a completion / workover / intervention (CWI) well.
+
+    annulus_sections / tubing_sections: (name, capacity bbl/ft, length ft MD),
+    surface down to the circulating point (an opened SSD or a tubing punch).
+    observed_icp_psi: the annulus pressure read once at kill rate (None until then -
+    the FCP, steps and schedule are then None).
+
+    Vertical well: leave out the MDs and key_points (MD = TVD).
+    Deviated or horizontal well: give the SSD, packer and top-perf MD and the key
+    points as (name, MD, TVD). Pressures use TVD; volumes and strokes use MD.
+    """
+    annulus = without_names(annulus_sections)
+    tubing = without_names(tubing_sections)
+    pump = pump_output_bbl_per_stk
+    ssd_md = ssd_tvd_ft if ssd_md_ft is None else ssd_md_ft
+    packer_md = packer_tvd_ft if packer_md_ft is None else packer_md_ft
+    top_perf_md = top_perf_tvd_ft if top_perf_md_ft is None else top_perf_md_ft
+    for name, sections in (("Annulus", annulus), ("Tubing", tubing)):
+        if total_length(sections) != ssd_md:
+            raise ValueError(f"{name} sections add up to {total_length(sections):,} ft MD "
+                             f"but should reach the {circulating_point} at {ssd_md:,} ft")
+    mid_perf = round_to_whole_number((top_perf_tvd_ft + bottom_perf_tvd_ft) / 2)
+    gradient = reverse.tubing_fluid_gradient(formation_pressure_psi, sitp_psi, mid_perf)
+    p_ssd = reverse.pressure_at_ssd(formation_pressure_psi, gradient, mid_perf, ssd_tvd_ft)
+    kwf = reverse.kill_weight_fluid(p_ssd, ssd_tvd_ft, margin_ppg)
+    frac = reverse.fracture_pressure(fracture_gradient_psi_per_ft, top_perf_tvd_ft)
+    limit_name, limit_psi = equipment_limit(equipment_ratings)
+    max_packer = reverse.max_annulus_pressure(frac, kwf, packer_fluid_ppg, 0, ssd_tvd_ft, gradient, top_perf_tvd_ft)
+    max_kill = reverse.max_annulus_pressure(frac, kwf, packer_fluid_ppg, ssd_tvd_ft, ssd_tvd_ft, gradient,
+                                            top_perf_tvd_ft)
+    annulus_strokes = surface_to_bit_strokes(annulus, pump)
+    tubing_strokes = surface_to_bit_strokes(tubing, pump)
+    sitp = reverse.sitp_after_ssd_opened(p_ssd, gradient, ssd_tvd_ft)
+    below = reverse.volume_below_ssd(tubing[-1][0], packer_md - ssd_md, casing_capacity_bbl_per_ft,
+                                     top_perf_md - packer_md)
+    initial, final = reverse.bullhead_below_ssd_limits(frac, kwf, ssd_tvd_ft, gradient, top_perf_tvd_ft)
+
+    sheet = {
+        "title": title,
+        "circulating_point": circulating_point,
+        "formation_pressure_psi": formation_pressure_psi,
+        "sitp_entered_psi": sitp_psi,
+        "mid_perf_tvd_ft": mid_perf,
+        "tubing_gradient_psi_per_ft": gradient,
+        "pressure_at_ssd_psi": p_ssd,
+        "kill_fluid_ppg": kwf,
+        "margin_ppg": margin_ppg,
+        "packer_fluid_ppg": packer_fluid_ppg,
+        "sitp_psi": sitp,
+        "sicp_psi": reverse.sicp_after_ssd_opened(p_ssd, packer_fluid_ppg, ssd_tvd_ft),
+        "fracture_psi": frac,
+        "fracture_gradient_psi_per_ft": fracture_gradient_psi_per_ft,
+        "top_perf_tvd_ft": top_perf_tvd_ft,
+        "ssd_tvd_ft": ssd_tvd_ft,
+        "equipment_limit_name": limit_name,
+        "equipment_limit_psi": limit_psi,
+        "max_packer_fluid_psi": max_packer,
+        "max_kill_fluid_psi": max_kill,
+        "annulus_volume_bbl": total_volume(annulus),
+        "annulus_strokes": annulus_strokes,
+        "tubing_volume_bbl": total_volume(tubing),
+        "tubing_strokes": tubing_strokes,
+        "pump_rate_bbl_per_min": pump_rate_bbl_per_min,
+        "spm": round_to_whole_number(pump_rate_bbl_per_min / pump),
+        "observed_icp_psi": observed_icp_psi,
+        "fcp_psi": None,
+        "fcp_floor_warning": None,
+        "steps": None,
+        "schedule": None,
+        "volume_below_ssd_bbl": below,
+        "bullhead_below_initial_psi": min(initial, limit_psi),
+        "bullhead_below_final_psi": min(final, limit_psi),
+        "schematic": {
+            "bit_md_ft": top_perf_md, "bit_tvd_ft": top_perf_tvd_ft, "bottom_name": "Top perf",
+            "shoe_md_ft": None, "shoe_tvd_ft": None,
+            "key_points": [{"name": name, "md_ft": md, "tvd_ft": tvd} for name, md, tvd in key_points],
+            "string": section_depths(list(tubing_sections) + [
+                (f"tubing, {circulating_point} to packer", tubing[-1][0], packer_md - ssd_md)]),
+            "circulating_point": circulating_point, "ssd_md_ft": ssd_md, "ssd_tvd_ft": ssd_tvd_ft,
+            "packer_md_ft": packer_md, "packer_tvd_ft": packer_tvd_ft,
+        },
+    }
+    if observed_icp_psi is None:
+        return sheet
+    fcp, floored = reverse.final_circulating_pressure(observed_icp_psi, kwf, packer_fluid_ppg, ssd_tvd_ft)
+    steps = reverse.reverse_circulation_steps(sitp, observed_icp_psi, fcp, annulus_strokes, tubing_strokes)
+    schedule = reverse.reverse_schedule(observed_icp_psi, kwf, packer_fluid_ppg, annulus, tubing, pump, frac,
+                                        gradient, top_perf_tvd_ft, limit_psi, ssd_tvd_ft=ssd_tvd_ft,
+                                        key_points=key_points)
+    sheet.update({
+        "fcp_psi": fcp,
+        "fcp_floor_warning": reverse.FCP_FLOOR_WARNING if floored else None,
+        "steps": [step._asdict() for step in steps],
+        "schedule": [row._asdict() for row in schedule],
+    })
+    return sheet
