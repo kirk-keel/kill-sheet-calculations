@@ -62,6 +62,7 @@ FORMS = {
         ("test_mud_weight_ppg", "Leak-off test mud weight", "ppg", False),
         ("sidpp_psi", "SIDPP", "psi", False),
         ("sicp_psi", "SICP", "psi", False),
+        ("pit_gain_bbl", "Pit gain (for the kill plot)", "bbl", True),
         ("scr_pressure_psi", "SCR pressure", "psi", False),
         ("safety_margin_psi", "Safety margin (SF), team's choice", "psi", False),
         ("pump_output_bbl_per_stk", "Pump output", "bbl/stk", False),

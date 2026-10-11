@@ -406,11 +406,15 @@ kill_plot W&W BHP fix and the casing-at-0 clamp (exact-value tests: 871/42, 879/
 NEXT, in this order (user): (1) the web page, (2) deviated/horizontal with a hand example
 first, (3) the volumetric plot.
 
-Web page sub-phases (user-approved; stop after each). DONE: W1, W2. W1 plumbing - Pyodide page, Pages
+Web page sub-phases (user-approved; stop after each). DONE: W1, W2, W3. W1 plumbing - Pyodide page, Pages
 workflow, baseline Driller's table (`web/app.py`, tested in tests/test_web_app.py).
 W2 example wells as a tested data module + dropdown + editable inputs + tables with an
 "Actual" column (Driller's, W&W, volumetric + L&B). W3 kill plot SVG - VERTICAL wells only
-(user OK); others say "plot coming in a later release". W4 page 1 well schematic +
+(user OK); others say "plot coming in a later release". W3 as built: optional input
+`pit_gain_bbl` on kill_sheet() (no pit gain = no plot); sheet["plot"] from kill_plot.py;
+the 12 Driller's/W&W examples carry pit_gain_bbl=10 (not printed - printed output unchanged).
+The vertical TAPERED example at 10 bbl gives the "suggests liquid" warning (0.2583 psi/ft) -
+the tapered plot has no hand example yet. W4 page 1 well schematic +
 summary. W5 print layout, README link, tag v1.1.0 (user: tag the SF work with the web page).
 
 ## Git / GitHub

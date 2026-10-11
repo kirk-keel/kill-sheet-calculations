@@ -110,3 +110,45 @@ def test_volumetric_sheet():
     assert sheet["volumetric"][-1]["gas_at_surface"] is True
     assert sheet["lubricate_and_bleed"][-1]["bleed_to_psi"] == 0
     assert sheet["kop_md_ft"] is None                        # vertical: no KOP check
+
+
+def test_kill_plot_on_the_sheet_drillers():
+    # The user-approved hand example: 10 bbl kick, SF 50
+    plot = kill_sheet(**BASELINE, pit_gain_bbl=10)["plot"]
+    assert (plot["peak_casing"]["casing_psi"], plot["peak_casing"]["gas_volume_bbl"]) == (1272, 53.6)
+    assert plot["max_shoe"]["shoe_psi"] == 3681
+    assert (plot["fracture_at_shoe_psi"], plot["maasp_psi"]) == (3909, 1124)
+    assert (plot["trapped_drill_pipe_psi"], plot["trapped_casing_psi"]) == (42, 42)
+    assert plot["points"][0] == {"strokes": 0, "drill_pipe_psi": 650, "casing_psi": 800,
+                                 "gas_volume_bbl": 10, "label": "shut in"}
+    assert "Single-bubble gas model" in plot["model_limits"]
+
+
+def test_kill_plot_on_the_sheet_wait_and_weight():
+    plot = kill_sheet(**BASELINE, method=WAIT_AND_WEIGHT, pit_gain_bbl=10)["plot"]
+    assert (plot["peak_casing"]["casing_psi"], plot["max_shoe"]["shoe_psi"]) == (1048, 3648)
+    assert (plot["trapped_drill_pipe_psi"], plot["trapped_casing_psi"]) == (50, 50)
+    assert plot["warnings"] == []
+
+
+def test_kill_plot_high_icp_uses_the_recalculated_pressures():
+    plot = kill_sheet(**BASELINE, method=WAIT_AND_WEIGHT, sidpp_at_start_psi=680, sicp_at_start_psi=830,
+                      observed_icp_psi=1470, pit_gain_bbl=10)["plot"]
+    assert plot["points"][2]["drill_pipe_psi"] == 1470          # at kill rate: recalculated ICP + SF
+    assert (plot["trapped_drill_pipe_psi"], plot["trapped_casing_psi"]) == (61, 61)
+
+
+def test_no_pit_gain_no_plot():
+    assert kill_sheet(**BASELINE)["plot"] == {"unavailable": "Enter the pit gain to forecast the kill plot."}
+
+
+def test_deviated_well_plot_is_coming_later():
+    deviated = dict(BASELINE, bit_md_ft=12_000, drill_string=[("DP", 0.0178, 10_500), ("HWDP", 0.0087, 900),
+                    ("DC", 0.0077, 600)], open_hole_annulus=[("DC", 0.0291, 600), ("HWDP", 0.0459, 900),
+                    ("DP", 0.0459, 5_350)], key_points=[("KOP", 3_000, 3_000)])
+    assert "coming in a later release" in kill_sheet(**deviated, pit_gain_bbl=10)["plot"]["unavailable"]
+
+
+def test_pit_gain_must_be_more_than_0():
+    with pytest.raises(ValueError, match="Pit gain"):
+        kill_sheet(**BASELINE, pit_gain_bbl=0)

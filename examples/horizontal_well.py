@@ -27,6 +27,7 @@ WELL = dict(
     # Kick data
     sidpp_psi=650,
     sicp_psi=700,
+    pit_gain_bbl=10,                    # kick size, for the kill plot
     scr_pressure_psi=750,               # at 30 spm
     safety_margin_psi=50,               # held on bottom, chosen by the team
     # Pump and volumes: (name, capacity bbl/ft, length ft MD)
