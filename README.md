@@ -51,6 +51,23 @@ trapped pressure, bleeds it off and flow checks. The calculator also runs in you
 - Nothing is sent anywhere: the page runs this project's own tested Python code
   in your browser (Pyodide). The first load takes a few seconds.
 
+## 45-Module Drilling, Completion & Well Intervention (CWI) Suite (`suite/`)
+
+In addition to the browser-based Pyodide kill sheet calculator (`src/killsheet/`), this repository includes the full **45-worksheet Petroleum Engineering Calculator Suite** (`suite/sheets/`, `build.py`, `petroleum_engineering_suite.xlsx`) covering **26 Completion, Production & Well Intervention (CWI) calculators** and **19 Drilling & Well Control calculators**, with automatic US-Oilfield ↔ SI dual-unit mirroring and automated formula verification (`verify.py`, `spot_check.py`, `stress_test.py`):
+
+| Category | Modules (`suite/sheets/`) |
+| --- | --- |
+| **Well Intervention (CWI)** | `coiled_tubing`, `wireline`, `snubbing`, `well_kill_ops`, `rig_up`, `fishing`, `procedure_intervention` |
+| **Completions & Artificial Lift** | `completion_fluids`, `tubing_packers`, `tubing_stress`, `perforating`, `stimulation`, `inflow`, `nodal`, `esp_design`, `gas_lift`, `rod_pump`, `completion_design`, `prod_chemistry`, `completion_equipment`, `advanced_completions`, `procedure_completion` |
+| **Drilling & Well Control** | `mud_hydrostatics`, `capacities`, `kill_sheet`, `kill_form`, `subsea_kill`, `well_control`, `hydraulics`, `bit_hydraulics`, `drill_string`, `directional`, `directional_survey`, `torque_drag`, `hole_cleaning`, `trip_schedule`, `pressure_window`, `log_interpretation`, `cementing`, `casing_design`, `procedure_drilling` |
+| **Reference & Schematics** | `cover`, `well_data`, `tubular_library`, `units`, `wellbore_schematic` |
+
+```bash
+pip install -e ".[dev,suite]"
+python build.py        # regenerates petroleum_engineering_suite.xlsx (45 sheets)
+pytest -q              # runs all killsheet + 45-sheet CWI/Drilling suite tests
+```
+
 ## Why I built it
 
 I built this calculator as a free resource for oilfield hands to plan and kill
