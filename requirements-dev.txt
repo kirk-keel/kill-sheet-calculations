@@ -6,4 +6,4 @@ ruff>=0.6.0
 mypy>=1.10.0
 mkdocs-material>=9.5.0
 pymdown-extensions
-pre-commit>=3.7.0
+pre-commit>=4.6.2
