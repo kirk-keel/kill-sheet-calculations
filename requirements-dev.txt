@@ -1,0 +1,9 @@
+-r requirements.txt
+pytest>=8.0
+formulas>=1.2.0
+schedula
+ruff>=0.6.0
+mypy>=1.10.0
+mkdocs-material>=9.5.0
+pymdown-extensions
+pre-commit>=3.7.0

@@ -55,3 +55,9 @@ nav:
   - Architecture & Design: architecture.md
   - Engineering API Reference: api_reference.md
   - Field Case Studies: case_studies.md
+  - Development Guide: development.md
+  - Security Policy: security.md
+  - Architecture Decision Records:
+      - "ADR 0001: Decoupled Dual Engine": adr/0001-decoupled-dual-engine.md
+      - "ADR 0002: Zero-Dependency Core": adr/0002-zero-dependency-pyodide-core.md
+      - "ADR 0003: IADC Rounding Rules": adr/0003-iadc-wellsharp-rounding-rules.md
