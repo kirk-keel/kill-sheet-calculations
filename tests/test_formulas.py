@@ -100,3 +100,47 @@ def test_kill_mud_overbalance():
 def test_kill_mud_overbalance_horizontal_well():
     # KMW 11.706 -> 11.8: (11.8 - 10.4) x 0.052 x 9,573 = 696.9 -> 697 (47 psi over SIDPP)
     assert kill_mud_overbalance(11.8, ORIGINAL_MUD_WEIGHT_PPG, 9_573) == 697
+
+
+# ---------------------------------------------------------------------------
+# Input validation and edge-case guards
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("tvd_ft", [0, -100])
+def test_kill_mud_weight_rejects_zero_or_negative_tvd(tvd_ft):
+    with pytest.raises(ValueError, match="TVD must be greater than 0 ft"):
+        kill_mud_weight(500, tvd_ft, 10.0)
+
+
+@pytest.mark.parametrize("omw_ppg", [0, -1.0])
+def test_kill_mud_weight_rejects_zero_or_negative_omw(omw_ppg):
+    with pytest.raises(ValueError, match="Original mud weight must be greater than 0 ppg"):
+        kill_mud_weight(500, 10_000, omw_ppg)
+
+
+@pytest.mark.parametrize("omw_ppg", [0, -1.0])
+def test_final_circulating_pressure_rejects_zero_or_negative_omw(omw_ppg):
+    with pytest.raises(ValueError, match="Original mud weight must be greater than 0 ppg"):
+        final_circulating_pressure(750, 11.5, omw_ppg)
+
+
+@pytest.mark.parametrize("shoe_tvd_ft", [0, -500])
+def test_max_allowable_mud_weight_rejects_zero_or_negative_shoe_tvd(shoe_tvd_ft):
+    with pytest.raises(ValueError, match="Shoe TVD must be greater than 0 ft"):
+        max_allowable_mud_weight(1000, shoe_tvd_ft, 10.0)
+
+
+@pytest.mark.parametrize("test_mw_ppg", [0, -2.0])
+def test_max_allowable_mud_weight_rejects_zero_or_negative_test_mw(test_mw_ppg):
+    with pytest.raises(ValueError, match="Test mud weight must be greater than 0 ppg"):
+        max_allowable_mud_weight(1000, 5000, test_mw_ppg)
+
+
+@pytest.mark.parametrize("shoe_tvd_ft", [0, -500])
+def test_maasp_rejects_zero_or_negative_shoe_tvd(shoe_tvd_ft):
+    with pytest.raises(ValueError, match="Shoe TVD must be greater than 0 ft"):
+        maasp(14.0, 10.0, shoe_tvd_ft)
+
+
+def test_kill_mud_overbalance_rejects_negative_tvd():
+    with pytest.raises(ValueError, match="TVD cannot be negative"):
+        kill_mud_overbalance(12.0, 10.0, -100)

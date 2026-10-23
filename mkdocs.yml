@@ -1,0 +1,57 @@
+site_name: Kill Sheet Calculations & Well Engineering Suite
+site_description: Production-grade well control, CWI, tubular stress, and petroleum engineering calculations in Python & Excel.
+site_author: Kirk Keel
+site_url: https://kirk-keel.github.io/kill-sheet-calculations/
+
+repo_name: kirk-keel/kill-sheet-calculations
+repo_url: https://github.com/kirk-keel/kill-sheet-calculations
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.arithmatex:
+      generic: true
+  - tables
+  - toc:
+      permalink: true
+
+extra_javascript:
+  - https://polyfill.io/v3/polyfill.min.js?features=es6
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Overview: index.md
+  - Architecture & Design: architecture.md
+  - Engineering API Reference: api_reference.md
+  - Field Case Studies: case_studies.md

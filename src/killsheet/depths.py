@@ -21,10 +21,17 @@ SURFACE = (0, 0)
 
 
 def check_key_points(key_points):
-    """Raise ValueError if any key point is impossible: TVD can never be deeper than MD."""
+    """Raise ValueError if any key point is impossible: TVD can never be deeper than MD,
+    depths cannot be negative, and MD must uniquely map to a single TVD."""
+    seen_mds = {0: 0}
     for md_ft, tvd_ft in key_points:
+        if md_ft < 0 or tvd_ft < 0:
+            raise ValueError(f"Depths cannot be negative (got MD {md_ft:,} ft, TVD {tvd_ft:,} ft)")
         if tvd_ft > md_ft:
             raise ValueError(f"TVD ({tvd_ft:,} ft) can't be deeper than MD ({md_ft:,} ft)")
+        if md_ft in seen_mds and seen_mds[md_ft] != tvd_ft:
+            raise ValueError(f"Conflicting TVDs for MD {md_ft:,} ft: {seen_mds[md_ft]:,} ft vs {tvd_ft:,} ft")
+        seen_mds[md_ft] = tvd_ft
 
 
 def tvd_at_md(md_ft, key_points):
@@ -35,6 +42,8 @@ def tvd_at_md(md_ft, key_points):
     where (MD1, TVD1) and (MD2, TVD2) are the key points either side of MD.
     key_points: list of (MD, TVD) pairs, in any order. Surface is added automatically.
     """
+    if md_ft < 0:
+        raise ValueError(f"MD cannot be negative (got {md_ft:,} ft)")
     check_key_points(key_points)
     points = sorted(set(key_points) | {SURFACE})
     for (md1, tvd1), (md2, tvd2) in zip(points, points[1:]):

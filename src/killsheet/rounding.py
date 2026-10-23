@@ -49,6 +49,16 @@ def round_to_tenth(value):
     return math.floor(round(value * 10, 6) + 0.5) / 10
 
 
+def round_to_hundredth(value):
+    """Round to the NEAREST 0.01, with .005 always going up (10.286 -> 10.29)."""
+    return math.floor(round(value * 100, 6) + 0.5) / 100
+
+
+def round_to_thousandth(value):
+    """Round to the NEAREST 0.001, with .0005 always going up (0.1235 -> 0.124)."""
+    return math.floor(round(value * 1000, 6) + 0.5) / 1000
+
+
 def round_to_4_places(value):
     """Round to the NEAREST 0.0001, with .00005 always going up (0.046365 -> 0.0464).
 

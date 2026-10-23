@@ -54,3 +54,25 @@ def test_md_below_the_deepest_key_point_is_rejected():
 def test_tvd_deeper_than_md_is_rejected():
     with pytest.raises(ValueError, match="can't be deeper than MD"):
         tvd_at_md(1_000, [(3_000, 3_100)])
+
+
+def test_negative_md_input_is_rejected():
+    with pytest.raises(ValueError, match="MD cannot be negative"):
+        tvd_at_md(-100, DEVIATED_KEY_POINTS)
+
+
+def test_negative_depth_in_key_points_is_rejected():
+    with pytest.raises(ValueError, match="Depths cannot be negative"):
+        tvd_at_md(1_000, [(-500, 200)])
+
+
+def test_conflicting_tvds_for_same_md_rejected():
+    with pytest.raises(ValueError, match="Conflicting TVDs for MD"):
+        tvd_at_md(1_000, [(3_000, 2_500), (3_000, 2_800)])
+
+
+def test_duplicate_exact_key_points_accepted():
+    # Duplicate exact points (3,000, 2,500) deduplicate cleanly without division by zero
+    points = [(3_000, 2_500), (3_000, 2_500), (6_000, 5_000)]
+    assert tvd_at_md(3_000, points) == 2_500
+    assert tvd_at_md(4_500, points) == 3_750

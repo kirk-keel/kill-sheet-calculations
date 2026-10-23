@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "killsheet"
-version = "1.4.0"
+version = "1.6.0"
 description = "Free kill sheet calculator for oilfield hands (oilfield units, IADC rounding rules)."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,9 +12,15 @@ authors = [{ name = "Kirk Keel" }]
 license = { text = "MIT" }
 dependencies = []
 
+[project.scripts]
+killsheet = "killsheet.cli:main"
+
 [project.optional-dependencies]
-dev = ["pytest>=8", "openpyxl>=3.1"]
+dev = ["pytest>=8", "openpyxl>=3.1", "ruff>=0.1", "mypy>=1.0"]
 suite = ["openpyxl>=3.1"]
+verify = ["formulas>=1.2.0", "schedula"]
+docs = ["mkdocs-material>=9.0", "pymdown-extensions"]
+all = ["openpyxl>=3.1", "formulas>=1.2.0", "schedula", "pytest>=8", "mkdocs-material>=9.0"]
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
@@ -23,3 +29,18 @@ include = ["killsheet*", "suite*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true

@@ -15,6 +15,7 @@ Per scenario:
     design); and expected status texts.
 """
 import math
+import os
 import sys
 import tempfile
 
@@ -379,7 +380,7 @@ def run_scenario(scn, idx):
     ks_hdr = find_row(wb["Kill Sheet"], "% strokes to bit")
     ok_na = na_whitelist(wb)
 
-    path = rf"{SCRATCH}\well_{idx}.xlsx"
+    path = os.path.join(SCRATCH, f"well_{idx}.xlsx")
     wb.save(path)
     xl = formulas.ExcelModel().loads(path).finish()
     sol = xl.calculate()

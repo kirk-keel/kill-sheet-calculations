@@ -32,7 +32,24 @@ vertical, deviated and horizontal wells with untapered and tapered strings. See 
 
 **Version 1.1 adds the safety margin and the web page.** Every Driller's and Wait and
 Weight kill now carries the team's safety margin (SF) from start-up to shut-in, checks the
-trapped pressure, bleeds it off and flow checks. The calculator also runs in your browser:
+trapped pressure, bleeds it off and flow checks. The calculator also runs in your browser.
+
+**Version 1.5 adds Subsea BOP Well Control, SI Metric Support, Rig Tripping/Slug Modules, and Field Case Studies:**
+- **Subsea Well Control (`killsheet.subsea`):** Choke line friction (CLF), dynamic MAASP, choke pressure management during pump ramp-up ($SICP - CLF$), and riser disconnect overbalance / margin.
+- **Dual-Unit SI Metric API (`killsheet.si`):** Full SI metric wrapper ($\text{kg/m}^3$, $\text{kPa}$, $\text{bar}$, $\text{m}$, $\text{m}^3$) applying standard IADC safety factor rounding.
+- **Rig-Floor Tripping & Slugs (`killsheet.tripping`):** Heavy slug volumes for target dry-pipe height, U-tube pit gain, dry vs. wet pipe displacement, and unfilled fluid level drop.
+- **Field Case Studies (`notebooks/`):** Interactive Jupyter notebooks demonstrating Deepwater GoM kicks, Extended-Reach horizontal Wolfcamp lateral kills, and Volumetric off-bottom gas migration.
+
+**Version 1.6 adds Influx Characterization, Tubular Buckling, Wellbore Hydraulics, Rig Simulator CLI, and Web UI Quick Tools:**
+- **Influx Identification & Real Gas ($Z$-factor) (`killsheet.influx`):** Influx density, fluid type classification (Gas, Oil, Saltwater), Beggs-Brill & Sutton natural gas compressibility factor ($Z$), and formation volume factor ($B_g$).
+- **Tubular Buckling & Lockup Analysis (`killsheet.buckling`):** Paslay-Dawson critical sinusoidal buckling and Lubinski / Wu & Juvkam-Wold helical lockup limits for drill strings and coiled tubing in directional laterals.
+- **Wellbore Hydraulics & Jet Impact (`killsheet.hydraulics`):** Total Flow Area (TFA), nozzle exit velocity, bit pressure drop, Hydraulic Horsepower (HHP/HSI), Jet Impact Force (JIF), and Bingham Plastic annular ECD profiling.
+- **Gas Migration & Bubble Rise (`killsheet.gas_migration`):** Hydrodynamic Harmathy slip velocity, Zukoski inclination factor, pressure buildup rate ($\frac{dP}{dt}$), and critical arrival times to shoe and surface.
+- **Casing Design & Biaxial Collapse Derating (`killsheet.casing_design`):** API Barlow internal yield burst rating (with 87.5% wall tolerance), API 5C3 tension-derated collapse resistance, and well control load checks.
+- **Balanced Cement Plugs (`killsheet.cementing`):** Slurry volume, balanced plug height with pipe in hole, spacer balancing for U-tube equilibrium, displacement volume, and dry sack requirements.
+- **Interactive Rig Simulator CLI (`killsheet simulate`):** Step-by-step well kill console tracking mud fronts, target drill pipe step-downs, dynamic shoe pressure against MAASP, and BHP formation balance.
+- **Web UI Export Toolbar & Quick Tools Modal:** One-click CSV and Markdown download buttons plus 7 dedicated quick-tool calculation panels in the browser.
+- **MkDocs Material Documentation:** Interactive static site configuration with LaTeX equations and Mermaid architectural diagrams.
 
 ### **[Open the web page](https://kirk-keel.github.io/kill-sheet-calculations/)**
 
@@ -72,6 +89,28 @@ pytest -q              # runs all killsheet + 45-sheet CWI/Drilling suite tests
 
 I built this calculator as a free resource for oilfield hands to plan and kill
 all types of wells using every well control technique at their disposal.
+
+## Engineering Principles & Portfolio Technical Highlights
+
+This project adheres strictly to **IADC WellSharp** and classical petroleum engineering principles without shortcuts or calculation placeholders:
+
+- **Strict Segregation of TVD vs. MD:**
+  - Hydrostatic head and pressure gradients are governed strictly by **True Vertical Depth (TVD)**:
+    $$P_{\text{hyd}} = 0.052 \times \rho \times \text{TVD}$$
+  - Section capacities, fluid displacement, strokes, and circulating friction losses are governed strictly by **Measured Depth (MD)**.
+- **IADC Conservative Rounding Protocols:**
+  - **Kill Mud Weight (KMW):** Rounded **UP to the NEXT 0.1 ppg** (even an exact integer value steps up 0.1 ppg, providing an explicit field safety margin).
+  - **MAMW & MAASP:** Rounded **DOWN** (0.1 ppg for MAMW, whole psi for MAASP) to ensure maximum allowable limits never overestimate formation fracture resistance.
+  - **ICP & FCP:** Rounded to the nearest whole psi.
+- **Horizontal & Deviated Well Kill Dynamics:**
+  - In horizontal wells, a linear Wait & Weight step-down schedule against strokes is physically invalid. Hydrostatic pressure gain halts once kill mud enters the horizontal lateral (TVD remains constant), whereas drill string friction continues to accumulate.
+  - The calculator computes drill pipe pressure from the true vertical depth of the kill mud front:
+    $$P_{\text{DP}} = \text{ICP} - \left[ \text{SIDPP} \times \frac{\text{TVD}_{\text{front}}}{\text{Bit TVD}} - (\text{FCP} - \text{SCR}) \times \frac{\text{MD}_{\text{front}}}{\text{Bit MD}} \right]$$
+    This accurately models pressure bottoming out at the heel and climbing back up to FCP across the lateral.
+- **Dynamic Single-Bubble Gas Migration Model:**
+  - Models influx expansion using Boyle's Law ($P_1 V_1 = P_2 V_2$) at the top of the bubble.
+  - Dynamically recalculates gas bubble height as it traverses diameter transitions in tapered strings and annular geometries.
+  - Classifies casing shoe integrity during gas migration into **4 operational risk tiers** (Tier 0 Standard up to Tier 4 Supervisor Intervention when shoe pressure limits risk formation fracture).
 
 ## What it calculates
 

@@ -29,6 +29,15 @@
   select, input, button { font: inherit; color: var(--ink); background: var(--input-bg);
                           border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; }
   button { cursor: pointer; background: var(--head); }
+  dialog { border: 1px solid var(--line); border-radius: 6px; padding: 18px; max-width: 650px; width: 90%; background: var(--bg); color: var(--ink); box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+  dialog::backdrop { background: rgba(0,0,0,0.5); }
+  .tools-tabs { display: flex; gap: 6px; margin-bottom: 14px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+  .tools-tabs button.active { font-weight: bold; background: var(--panel); border-color: var(--dp); }
+  .tool-panel { display: none; }
+  .tool-panel.active { display: block; }
+  .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
+  .tool-result { margin-top: 10px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; font-family: monospace; white-space: pre-wrap; font-size: 0.9em; }
+  .dialog-close { float: right; margin-top: -6px; }
   .layout { display: grid; gap: 20px; grid-template-columns: 1fr; }
   @media (min-width: 1100px) { .layout { grid-template-columns: 400px 1fr; align-items: start; } }
   #results { min-width: 0; }
@@ -125,8 +134,126 @@
       <select id="well"></select>
       <button id="reset" type="button">Reset to the example</button>
       <button id="print" type="button">Print kill sheet</button>
+      <button id="export-csv" type="button" title="Download Wait &amp; Weight Step-down Schedule as CSV">Export CSV</button>
+      <button id="export-md" type="button" title="Download Well Summary &amp; Kill Sheet as Markdown">Export Markdown</button>
+      <button id="open-tools" type="button" title="Quick Tools for Subsea, Tripping, Kick Tolerance, Influx">Quick Rig Tools</button>
       <span id="busy" class="muted" role="status" hidden>Calculating...</span>
     </div>
+    <dialog id="tools-dialog" aria-label="Quick Rig Engineering Tools">
+      <button id="tools-close" class="dialog-close" type="button">&times; Close</button>
+      <h3>Quick Rig Engineering Tools</h3>
+      <div class="tools-tabs">
+        <button type="button" class="tab-btn active" data-tab="tab-subsea">Subsea / CLF</button>
+        <button type="button" class="tab-btn" data-tab="tab-tripping">Tripping &amp; Slug</button>
+        <button type="button" class="tab-btn" data-tab="tab-kt">Kick Tolerance</button>
+        <button type="button" class="tab-btn" data-tab="tab-influx">Influx Fluid ID</button>
+        <button type="button" class="tab-btn" data-tab="tab-migration">Gas Migration</button>
+        <button type="button" class="tab-btn" data-tab="tab-casing">Casing Burst/Collapse</button>
+        <button type="button" class="tab-btn" data-tab="tab-cement">Cement Plug</button>
+      </div>
+
+      <div id="tab-subsea" class="tool-panel active">
+        <div class="tool-grid">
+          <div><label>Mud Weight (ppg)</label><input id="sb-omw" type="number" step="0.1" value="12.0"></div>
+          <div><label>TVD (ft)</label><input id="sb-tvd" type="number" value="10000"></div>
+          <div><label>Shoe TVD (ft)</label><input id="sb-shoe" type="number" value="6000"></div>
+          <div><label>Shoe LOT (ppg)</label><input id="sb-lot" type="number" step="0.1" value="15.0"></div>
+          <div><label>SIDPP (psi)</label><input id="sb-sidpp" type="number" value="500"></div>
+          <div><label>SICP (psi)</label><input id="sb-sicp" type="number" value="700"></div>
+          <div><label>SCR (psi)</label><input id="sb-scr" type="number" value="750"></div>
+          <div><label>Choke Line Friction CLF (psi)</label><input id="sb-clf" type="number" value="250"></div>
+          <div><label>Water Depth (ft)</label><input id="sb-wd" type="number" value="1500"></div>
+          <div><label>Air Gap (ft)</label><input id="sb-ag" type="number" value="75"></div>
+        </div>
+        <button id="btn-calc-subsea" type="button">Calculate Subsea Kill</button>
+        <div id="res-subsea" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-tripping" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>Desired Dry Pipe (ft)</label><input id="tr-dry" type="number" value="250"></div>
+          <div><label>DP Capacity (bbl/ft)</label><input id="tr-cap" type="number" step="0.0001" value="0.0178"></div>
+          <div><label>Mud Weight (ppg)</label><input id="tr-omw" type="number" step="0.1" value="10.0"></div>
+          <div><label>Slug Mud Weight (ppg)</label><input id="tr-slug" type="number" step="0.1" value="12.0"></div>
+        </div>
+        <button id="btn-calc-tripping" type="button">Calculate Slug Volume &amp; U-Tube Gain</button>
+        <div id="res-tripping" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-kt" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>Mud Weight (ppg)</label><input id="kt-mw" type="number" step="0.1" value="12.5"></div>
+          <div><label>Well TVD (ft)</label><input id="kt-tvd" type="number" value="10000"></div>
+          <div><label>Shoe TVD (ft)</label><input id="kt-shoe" type="number" value="5000"></div>
+          <div><label>Shoe LOT (ppg)</label><input id="kt-lot" type="number" step="0.1" value="14.5"></div>
+          <div><label>Anticipated SIDPP (psi)</label><input id="kt-sidpp" type="number" value="350"></div>
+          <div><label>Annular Capacity at Shoe (bbl/ft)</label><input id="kt-cap" type="number" step="0.0001" value="0.0459"></div>
+        </div>
+        <button id="btn-calc-kt" type="button">Calculate Kick Tolerance (Boyle's Law)</button>
+        <div id="res-kt" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-influx" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>SIDPP (psi)</label><input id="inf-sidpp" type="number" value="450"></div>
+          <div><label>SICP (psi)</label><input id="inf-sicp" type="number" value="680"></div>
+          <div><label>Pit Gain (bbl)</label><input id="inf-gain" type="number" step="0.1" value="25.0"></div>
+          <div><label>BHA Annular Cap (bbl/ft)</label><input id="inf-cap" type="number" step="0.0001" value="0.0500"></div>
+          <div><label>Original MW (ppg)</label><input id="inf-omw" type="number" step="0.1" value="11.0"></div>
+          <div><label>Bit TVD (ft)</label><input id="inf-tvd" type="number" value="10000"></div>
+        </div>
+        <button id="btn-calc-influx" type="button">Characterize Influx &amp; Fluid ID</button>
+        <div id="res-influx" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-migration" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>Mud Weight (ppg)</label><input id="gm-mw" type="number" step="0.1" value="11.5"></div>
+          <div><label>Bit TVD (ft)</label><input id="gm-bit" type="number" value="12000"></div>
+          <div><label>Shoe TVD (ft)</label><input id="gm-shoe" type="number" value="7500"></div>
+          <div><label>Initial SICP (psi)</label><input id="gm-sicp" type="number" value="650"></div>
+          <div><label>Inclination (deg)</label><input id="gm-inc" type="number" value="35"></div>
+        </div>
+        <button id="btn-calc-migration" type="button">Calculate Gas Migration &amp; Arrival</button>
+        <div id="res-migration" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-casing" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>Casing OD (in)</label><input id="cs-od" type="number" step="0.001" value="9.625"></div>
+          <div><label>Casing ID (in)</label><input id="cs-id" type="number" step="0.001" value="8.835"></div>
+          <div><label>Casing Grade</label>
+            <select id="cs-grade">
+              <option value="J-55">J-55 (55k psi)</option>
+              <option value="L-80" selected>L-80 (80k psi)</option>
+              <option value="N-80">N-80 (80k psi)</option>
+              <option value="P-110">P-110 (110k psi)</option>
+              <option value="Q-125">Q-125 (125k psi)</option>
+            </select>
+          </div>
+          <div><label>Nominal Collapse (psi)</label><input id="cs-col" type="number" value="3090"></div>
+          <div><label>Axial Tension Load (lbf)</label><input id="cs-ten" type="number" value="220000"></div>
+          <div><label>Anticipated SICP (psi)</label><input id="cs-sicp" type="number" value="1800"></div>
+          <div><label>External Collapse Load (psi)</label><input id="cs-ext" type="number" value="2100"></div>
+        </div>
+        <button id="btn-calc-casing" type="button">Evaluate Casing Burst/Collapse Integrity</button>
+        <div id="res-casing" class="tool-result" hidden></div>
+      </div>
+
+      <div id="tab-cement" class="tool-panel">
+        <div class="tool-grid">
+          <div><label>Plug Top MD (ft)</label><input id="cm-top" type="number" value="7200"></div>
+          <div><label>Plug Bottom MD (ft)</label><input id="cm-bot" type="number" value="7800"></div>
+          <div><label>Hole Capacity (bbl/ft)</label><input id="cm-hole" type="number" step="0.0001" value="0.0459"></div>
+          <div><label>Pipe Capacity (bbl/ft)</label><input id="cm-pipe" type="number" step="0.0001" value="0.0178"></div>
+          <div><label>Annular Capacity (bbl/ft)</label><input id="cm-ann" type="number" step="0.0001" value="0.0400"></div>
+          <div><label>Spacer Ahead (bbl)</label><input id="cm-spc" type="number" value="25"></div>
+          <div><label>Slurry Excess (%)</label><input id="cm-exc" type="number" value="15"></div>
+        </div>
+        <button id="btn-calc-cement" type="button">Calculate Balanced Cement Plug</button>
+        <div id="res-cement" class="tool-result" hidden></div>
+      </div>
+    </dialog>
     <div class="layout">
       <section id="inputs" aria-label="Well data"></section>
       <section id="results" aria-label="Kill sheet"></section>
@@ -832,6 +959,196 @@
     document.getElementById("print").addEventListener("click", () => window.print());
     window.addEventListener("beforeprint", () => {
       document.getElementById("footer").dataset.printed = new Date().toLocaleString();
+    });
+
+    // Export handlers
+    document.getElementById("export-csv").addEventListener("click", async () => {
+      try {
+        const res = JSON.parse(await python("export_schedule_csv", well.kind, JSON.stringify(inputs)));
+        if (res.error) { alert(res.error); return; }
+        const blob = new Blob([res.csv], {type: "text/csv"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${well.id}_step_down_schedule.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) { alert("Export error: " + err.message); }
+    });
+
+    document.getElementById("export-md").addEventListener("click", async () => {
+      try {
+        const res = JSON.parse(await python("export_markdown", well.kind, JSON.stringify(inputs)));
+        if (res.error) { alert(res.error); return; }
+        const blob = new Blob([res.markdown], {type: "text/markdown"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${well.id}_kill_sheet_report.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) { alert("Export error: " + err.message); }
+    });
+
+    // Quick Tools Dialog
+    const dialog = document.getElementById("tools-dialog");
+    document.getElementById("open-tools").addEventListener("click", () => dialog.showModal());
+    document.getElementById("tools-close").addEventListener("click", () => dialog.close());
+
+    // Tools Tab Switching
+    dialog.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        dialog.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+        dialog.querySelectorAll(".tool-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        document.getElementById(btn.dataset.tab).classList.add("active");
+      });
+    });
+
+    // Tool Calculation Handlers
+    document.getElementById("btn-calc-subsea").addEventListener("click", async () => {
+      const data = {
+        original_mud_weight_ppg: parseFloat(document.getElementById("sb-omw").value),
+        tvd_ft: parseFloat(document.getElementById("sb-tvd").value),
+        shoe_tvd_ft: parseFloat(document.getElementById("sb-shoe").value),
+        lot_emw_ppg: parseFloat(document.getElementById("sb-lot").value),
+        sidpp_psi: parseFloat(document.getElementById("sb-sidpp").value),
+        sicp_psi: parseFloat(document.getElementById("sb-sicp").value),
+        scr_pressure_psi: parseFloat(document.getElementById("sb-scr").value),
+        clf_psi: parseFloat(document.getElementById("sb-clf").value),
+        water_depth_ft: parseFloat(document.getElementById("sb-wd").value),
+        air_gap_ft: parseFloat(document.getElementById("sb-ag").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "subsea", JSON.stringify(data)));
+      const box = document.getElementById("res-subsea");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Kill Mud Weight: ${r.kill_mud_weight_ppg} ppg\n` +
+                        `Static MAASP: ${int(r.static_maasp_psi)} psi | Dynamic MAASP: ${int(r.dynamic_maasp_psi)} psi\n` +
+                        `Choke Ramp Pressure (SICP - CLF): ${int(r.choke_pressure_at_kill_rate_psi)} psi\n` +
+                        `Riser Margin Mud Weight: ${r.riser_margin_mud_weight_ppg} ppg (+${r.riser_margin_delta_ppg} ppg)\n` +
+                        `Post-Disconnect BHP: ${int(r.post_disconnect_bhp_psi)} psi (${int(r.disconnect_overbalance_psi)} psi margin)`;
+    });
+
+    document.getElementById("btn-calc-tripping").addEventListener("click", async () => {
+      const data = {
+        desired_dry_pipe_ft: parseFloat(document.getElementById("tr-dry").value),
+        dp_capacity_bbl_per_ft: parseFloat(document.getElementById("tr-cap").value),
+        original_mud_weight_ppg: parseFloat(document.getElementById("tr-omw").value),
+        slug_weight_ppg: parseFloat(document.getElementById("tr-slug").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "tripping", JSON.stringify(data)));
+      const box = document.getElementById("res-tripping");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Required Heavy Slug Volume: ${dec(r.slug_volume_bbl, 1)} bbl\n` +
+                        `Slug Length in Pipe: ${int(r.slug_length_ft)} ft\n` +
+                        `Surface Pit Gain (U-tubing): ${dec(r.pit_gain_bbl, 1)} bbl`;
+    });
+
+    document.getElementById("btn-calc-kt").addEventListener("click", async () => {
+      const data = {
+        mud_weight_ppg: parseFloat(document.getElementById("kt-mw").value),
+        tvd_ft: parseFloat(document.getElementById("kt-tvd").value),
+        shoe_tvd_ft: parseFloat(document.getElementById("kt-shoe").value),
+        lot_emw_ppg: parseFloat(document.getElementById("kt-lot").value),
+        sidpp_psi: parseFloat(document.getElementById("kt-sidpp").value),
+        annular_capacity_bbl_per_ft: parseFloat(document.getElementById("kt-cap").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "kick_tolerance", JSON.stringify(data)));
+      const box = document.getElementById("res-kt");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Kick Intensity: ${r.kick_intensity_ppg} ppg (Pore Press: ${int(r.formation_pressure_psi)} psi)\n` +
+                        `Shoe MAASP: ${int(r.shoe_maasp_psi)} psi (Frac Press: ${int(r.shoe_fracture_pressure_psi)} psi)\n` +
+                        `Max Gas Influx Height at Shoe: ${int(r.max_gas_height_at_shoe_ft)} ft\n` +
+                        `Kick Tolerance (Bottomhole Volume): ${dec(r.kick_tolerance_bottomhole_bbl, 1)} bbl`;
+    });
+
+    document.getElementById("btn-calc-influx").addEventListener("click", async () => {
+      const data = {
+        sidpp_psi: parseFloat(document.getElementById("inf-sidpp").value),
+        sicp_psi: parseFloat(document.getElementById("inf-sicp").value),
+        pit_gain_bbl: parseFloat(document.getElementById("inf-gain").value),
+        annular_capacity_bbl_per_ft: parseFloat(document.getElementById("inf-cap").value),
+        original_mud_weight_ppg: parseFloat(document.getElementById("inf-omw").value),
+        bit_tvd_ft: parseFloat(document.getElementById("inf-tvd").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "influx", JSON.stringify(data)));
+      const box = document.getElementById("res-influx");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Influx Height: ${int(r.influx_height_ft)} ft\n` +
+                        `Influx Gradient: ${r.influx_gradient_psi_per_ft} psi/ft | Density: ${r.influx_density_ppg} ppg\n` +
+                        `Fluid Classification: ${r.fluid_type.toUpperCase()}\n` +
+                        `Formation Pressure: ${int(r.formation_pressure_psi)} psi\n` +
+                        (r.is_gas ? `Real Gas Z-factor: ${r.z_factor} | Bg: ${r.bg_bbl_per_mscf} bbl/Mscf` : "");
+    });
+
+    document.getElementById("btn-calc-migration").addEventListener("click", async () => {
+      const data = {
+        mud_weight_ppg: parseFloat(document.getElementById("gm-mw").value),
+        bit_tvd_ft: parseFloat(document.getElementById("gm-bit").value),
+        shoe_tvd_ft: parseFloat(document.getElementById("gm-shoe").value),
+        initial_sicp_psi: parseFloat(document.getElementById("gm-sicp").value),
+        inclination_deg: parseFloat(document.getElementById("gm-inc").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "gas_migration", JSON.stringify(data)));
+      const box = document.getElementById("res-migration");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Percolation Velocity: ${r.migration_velocity_ft_per_hr} ft/hr\n` +
+                        `Pressure Rise Rate: ${int(r.pressure_rise_rate_psi_per_hr)} psi/hr\n` +
+                        `Time to Casing Shoe: ${r.time_to_casing_shoe_hr} hrs (${r.time_to_casing_shoe_min} min)\n` +
+                        `Time to Surface BOP: ${r.time_to_surface_bop_hr} hrs (${r.time_to_surface_bop_min} min)\n` +
+                        `Projected SICP at Shoe: ${int(r.projected_sicp_at_shoe_psi)} psi`;
+    });
+
+    document.getElementById("btn-calc-casing").addEventListener("click", async () => {
+      const data = {
+        od_in: parseFloat(document.getElementById("cs-od").value),
+        id_in: parseFloat(document.getElementById("cs-id").value),
+        casing_grade: document.getElementById("cs-grade").value,
+        nominal_collapse_psi: parseFloat(document.getElementById("cs-col").value),
+        hanging_weight_lbf: parseFloat(document.getElementById("cs-ten").value),
+        anticipated_surface_sicp_psi: parseFloat(document.getElementById("cs-sicp").value),
+        external_fluid_collapse_psi: parseFloat(document.getElementById("cs-ext").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "casing_design", JSON.stringify(data)));
+      const box = document.getElementById("res-casing");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `API Burst Rating (0.875): ${int(r.api_burst_rating_psi)} psi | SF: ${r.burst_safety_factor} (${r.burst_integrity_ok ? 'PASS' : 'FAIL'})\n` +
+                        `Nominal Collapse: ${int(r.nominal_collapse_psi)} psi\n` +
+                        `Tension-Derated Collapse: ${int(r.tension_derated_collapse_psi)} psi | SF: ${r.collapse_safety_factor} (${r.collapse_integrity_ok ? 'PASS' : 'FAIL'})`;
+    });
+
+    document.getElementById("btn-calc-cement").addEventListener("click", async () => {
+      const data = {
+        plug_top_md_ft: parseFloat(document.getElementById("cm-top").value),
+        plug_bottom_md_ft: parseFloat(document.getElementById("cm-bot").value),
+        hole_capacity_bbl_per_ft: parseFloat(document.getElementById("cm-hole").value),
+        pipe_capacity_bbl_per_ft: parseFloat(document.getElementById("cm-pipe").value),
+        annular_capacity_bbl_per_ft: parseFloat(document.getElementById("cm-ann").value),
+        spacer_ahead_bbl: parseFloat(document.getElementById("cm-spc").value),
+        excess_percent: parseFloat(document.getElementById("cm-exc").value),
+      };
+      const res = JSON.parse(await python("quick_calc", "cementing", JSON.stringify(data)));
+      const box = document.getElementById("res-cement");
+      box.hidden = false;
+      if (res.error) { box.textContent = "Error: " + res.error; return; }
+      const r = res.result;
+      box.textContent = `Plug Length: ${int(r.plug_length_ft)} ft | Slurry Volume: ${dec(r.slurry_volume_bbl, 1)} bbl\n` +
+                        `Balanced Plug Height (with pipe): ${int(r.balanced_plug_height_with_pipe_ft)} ft\n` +
+                        `Balanced Spacer Behind: ${dec(r.balanced_spacer_behind_bbl, 1)} bbl (U-tube balance)\n` +
+                        `Displacement Volume: ${dec(r.displacement_volume_bbl, 1)} bbl\n` +
+                        `Dry Cement Required: ${int(r.sacks_cement)} sacks | Mix Water: ${dec(r.mix_water_bbl, 1)} bbl`;
     });
 
     const panel = document.getElementById("inputs");

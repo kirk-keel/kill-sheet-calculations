@@ -91,7 +91,7 @@ def volume_to_length(sections, length_ft):
         used_ft = min(section_length_ft, remaining_ft)
         running_volume_bbl = round_to_tenth(running_volume_bbl + section_volume(capacity_bbl_per_ft, used_ft))
         remaining_ft -= used_ft
-    if remaining_ft > 0:
+    if round(remaining_ft, 4) > 0:
         raise ValueError(f"{length_ft:,} ft is longer than the sections ({length_ft - remaining_ft:,} ft)")
     return running_volume_bbl
 
@@ -154,7 +154,7 @@ def check_section_lengths(drill_string_sections, open_hole_annulus_sections,
         ("Cased hole annulus", total_length(cased_hole_annulus_sections), shoe_md_ft),
     ]
     for name, actual_ft, expected_ft in checks:
-        if actual_ft != expected_ft:
+        if abs(actual_ft - expected_ft) > 1e-4:
             raise ValueError(f"{name} sections add up to {actual_ft:,} ft MD but should be {expected_ft:,} ft")
 
 

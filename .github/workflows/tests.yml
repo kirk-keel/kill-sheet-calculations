@@ -23,8 +23,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install the calculator and pytest
-        run: pip install -e ".[dev]"
+      - name: Install the calculator, suite dependencies and pytest
+        run: pip install -e ".[dev,suite]"
 
       - name: Run the tests
         run: pytest -v
@@ -32,3 +32,19 @@ jobs:
       - name: Run the example kill sheets
         run: |
           for well in examples/*_well.py; do python "$well"; done
+          python examples/example_subsea.py
+          python examples/example_tripping_slug.py
+          python examples/example_kick_tolerance.py
+          python examples/example_influx_identification.py
+          python examples/example_tubular_buckling.py
+          python examples/example_wellbore_hydraulics.py
+          python examples/example_simulator.py
+          python examples/example_gas_migration.py
+          python examples/example_casing_design.py
+          python examples/example_cement_plug.py
+
+      - name: Build the engineering suite workbook
+        run: python build.py
+
+      - name: Build the web application distribution
+        run: python web/build_site.py

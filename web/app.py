@@ -200,3 +200,56 @@ def calculate(kind, inputs_json):
     except (ValueError, TypeError, KeyError, ZeroDivisionError, IndexError) as error:
         return json.dumps({"error": str(error)})
     return json.dumps({"kind": kind, "sheet": sheet})
+
+
+def export_schedule_csv(kind, inputs_json):
+    """Exports Wait & Weight schedule as CSV formatted string."""
+    from killsheet.export import schedule_to_csv
+    res = json.loads(calculate(kind, inputs_json))
+    if "error" in res:
+        return json.dumps({"error": res["error"]})
+    sheet = res["sheet"]
+    sched = sheet.get("schedule") or []
+    if not sched:
+        return json.dumps({"error": "No step-down schedule available for this sheet configuration."})
+    return json.dumps({"csv": schedule_to_csv(sched)})
+
+
+def export_markdown(kind, inputs_json):
+    """Exports sheet summary as formatted Markdown report."""
+    from killsheet.export import to_markdown_report
+    res = json.loads(calculate(kind, inputs_json))
+    if "error" in res:
+        return json.dumps({"error": res["error"]})
+    return json.dumps({"markdown": to_markdown_report(res["sheet"])})
+
+
+def quick_calc(module_name, inputs_json):
+    """Quick calculations for Subsea, Tripping, Kick Tolerance, and Influx."""
+    inputs = json.loads(inputs_json)
+    try:
+        if module_name == "subsea":
+            from killsheet.subsea import subsea_kill_summary
+            return json.dumps({"result": subsea_kill_summary(**inputs)})
+        elif module_name == "tripping":
+            from killsheet.tripping import trip_slug_summary
+            return json.dumps({"result": trip_slug_summary(**inputs)})
+        elif module_name == "kick_tolerance":
+            from killsheet.kick_tolerance import kick_tolerance_summary
+            return json.dumps({"result": kick_tolerance_summary(**inputs)})
+        elif module_name == "influx":
+            from killsheet.influx import characterize_kick
+            return json.dumps({"result": characterize_kick(**inputs)})
+        elif module_name == "gas_migration":
+            from killsheet.gas_migration import evaluate_gas_migration
+            return json.dumps({"result": evaluate_gas_migration(**inputs)})
+        elif module_name == "casing_design":
+            from killsheet.casing_design import evaluate_casing_well_control_integrity
+            return json.dumps({"result": evaluate_casing_well_control_integrity(**inputs)})
+        elif module_name == "cementing":
+            from killsheet.cementing import balanced_cement_plug_summary
+            return json.dumps({"result": balanced_cement_plug_summary(**inputs)})
+        else:
+            return json.dumps({"error": f"Unknown tool module: {module_name}"})
+    except Exception as e:
+        return json.dumps({"error": str(e)})

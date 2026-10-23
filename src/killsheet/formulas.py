@@ -33,6 +33,10 @@ def kill_mud_weight(sidpp_psi, tvd_ft, original_mud_weight_ppg):
             "SIDPP must be greater than 0 psi. If the drill pipe reads 0 with a "
             "float in the string, bump the float to determine the true SIDPP."
         )
+    if tvd_ft <= 0:
+        raise ValueError(f"TVD must be greater than 0 ft (got {tvd_ft}).")
+    if original_mud_weight_ppg <= 0:
+        raise ValueError(f"Original mud weight must be greater than 0 ppg (got {original_mud_weight_ppg}).")
     raw_kmw = original_mud_weight_ppg + sidpp_psi / (PSI_PER_FT_PER_PPG * tvd_ft)
     return round_up_to_next_tenth(raw_kmw)
 
@@ -54,6 +58,8 @@ def final_circulating_pressure(scr_pressure_psi, kill_mud_weight_ppg, original_m
 
     Pass in the already-rounded KMW from kill_mud_weight().
     """
+    if original_mud_weight_ppg <= 0:
+        raise ValueError(f"Original mud weight must be greater than 0 ppg (got {original_mud_weight_ppg}).")
     return round_to_whole_number(scr_pressure_psi * (kill_mud_weight_ppg / original_mud_weight_ppg))
 
 
@@ -65,6 +71,10 @@ def max_allowable_mud_weight(lot_pressure_psi, shoe_tvd_ft, test_mud_weight_ppg)
     LOT pressure is the surface leak-off pressure from the shoe test,
     and Test MW is the mud weight in the hole during that test.
     """
+    if shoe_tvd_ft <= 0:
+        raise ValueError(f"Shoe TVD must be greater than 0 ft (got {shoe_tvd_ft}).")
+    if test_mud_weight_ppg <= 0:
+        raise ValueError(f"Test mud weight must be greater than 0 ppg (got {test_mud_weight_ppg}).")
     raw_max_mw = test_mud_weight_ppg + lot_pressure_psi / (PSI_PER_FT_PER_PPG * shoe_tvd_ft)
     return round_down_to_tenth(raw_max_mw)
 
@@ -77,6 +87,8 @@ def maasp(max_allowable_mud_weight_ppg, current_mud_weight_ppg, shoe_tvd_ft):
     Pass in the already-rounded Max MW from max_allowable_mud_weight().
     Recalculate with the kill mud weight once the annulus is displaced.
     """
+    if shoe_tvd_ft <= 0:
+        raise ValueError(f"Shoe TVD must be greater than 0 ft (got {shoe_tvd_ft}).")
     raw_maasp = (max_allowable_mud_weight_ppg - current_mud_weight_ppg) * PSI_PER_FT_PER_PPG * shoe_tvd_ft
     return round_down_to_whole_number(raw_maasp)
 
@@ -89,5 +101,7 @@ def kill_mud_overbalance(kill_mud_weight_ppg, original_mud_weight_ppg, tvd_ft):
     Because KMW is rounded UP, this is a little MORE than SIDPP
     (baseline well: 1.1 x 0.052 x 11,500 = 657.8 -> 658 psi vs SIDPP 650).
     """
+    if tvd_ft < 0:
+        raise ValueError(f"TVD cannot be negative (got {tvd_ft}).")
     return round_to_whole_number(
         (kill_mud_weight_ppg - original_mud_weight_ppg) * PSI_PER_FT_PER_PPG * tvd_ft)

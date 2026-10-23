@@ -96,3 +96,45 @@ def test_reverse_circulation_before_the_icp_is_read():
     sheet = json.loads(APP["calculate"]("reverse circulation", json.dumps(inputs)))["sheet"]
     assert (sheet["fcp_psi"], sheet["steps"], sheet["schedule"]) == (None, None, None)
     assert sheet["sicp_psi"] > 0
+
+
+def test_export_schedule_csv_and_markdown():
+    ww_well = next(well for well in WELLS["wells"] if well["id"] == "wait_and_weight_well")
+    csv_res = json.loads(APP["export_schedule_csv"](ww_well["kind"], json.dumps(ww_well["inputs"])))
+    assert "csv" in csv_res
+    assert "Strokes,MD_ft,TVD_ft,Drill_Pipe_Pressure_psi" in csv_res["csv"]
+
+    md_res = json.loads(APP["export_markdown"](ww_well["kind"], json.dumps(ww_well["inputs"])))
+    assert "markdown" in md_res
+    assert "## Key Kill Parameters" in md_res["markdown"]
+
+
+def test_quick_calc_tools():
+    # Tripping quick tool
+    trip_in = {"desired_dry_pipe_ft": 200, "dp_capacity_bbl_per_ft": 0.0178, "original_mud_weight_ppg": 10.0, "slug_weight_ppg": 12.0}
+    res = json.loads(APP["quick_calc"]("tripping", json.dumps(trip_in)))
+    assert res["result"]["slug_volume_bbl"] > 0
+
+    # Subsea quick tool
+    subsea_in = {
+        "original_mud_weight_ppg": 12.0, "tvd_ft": 10000, "shoe_tvd_ft": 6000, "lot_emw_ppg": 15.0,
+        "sidpp_psi": 500, "sicp_psi": 700, "scr_pressure_psi": 750, "pump_output_bbl_per_stk": 0.1,
+        "choke_line_id_in": 3.0, "choke_line_length_ft": 1650, "clf_psi": 250, "water_depth_ft": 1500, "air_gap_ft": 75
+    }
+    sub_res = json.loads(APP["quick_calc"]("subsea", json.dumps(subsea_in)))
+    assert sub_res["result"]["kill_mud_weight_ppg"] > 12.0
+
+    # Gas migration quick tool
+    gm_in = {"mud_weight_ppg": 11.5, "bit_tvd_ft": 10000, "shoe_tvd_ft": 6000, "initial_sicp_psi": 500}
+    gm_res = json.loads(APP["quick_calc"]("gas_migration", json.dumps(gm_in)))
+    assert gm_res["result"]["pressure_rise_rate_psi_per_hr"] > 0
+
+    # Casing design quick tool
+    cd_in = {"od_in": 9.625, "id_in": 8.835, "casing_grade": "L-80", "nominal_collapse_psi": 3090, "hanging_weight_lbf": 200000, "anticipated_surface_sicp_psi": 1500}
+    cd_res = json.loads(APP["quick_calc"]("casing_design", json.dumps(cd_in)))
+    assert cd_res["result"]["api_burst_rating_psi"] > 5000
+
+    # Cementing quick tool
+    cm_in = {"plug_top_md_ft": 7000, "plug_bottom_md_ft": 7500, "hole_capacity_bbl_per_ft": 0.0459, "pipe_capacity_bbl_per_ft": 0.0178, "annular_capacity_bbl_per_ft": 0.0400}
+    cm_res = json.loads(APP["quick_calc"]("cementing", json.dumps(cm_in)))
+    assert cm_res["result"]["slurry_volume_bbl"] > 0
